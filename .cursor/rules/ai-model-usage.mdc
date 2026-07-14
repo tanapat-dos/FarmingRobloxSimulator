@@ -1,0 +1,57 @@
+---
+description: Choose the right AI model and workflow for each development task
+alwaysApply: true
+---
+
+# AI Model Usage (Preferred Workflow)
+
+Keep premium model usage low. Use stronger reasoning only when it matters.
+
+## Composer
+
+Repository-wide understanding and multi-file changes.
+
+Use for:
+
+- Exploring or mapping the codebase
+- Whole features touching many files
+- Renaming systems, repo-wide edits, boilerplate across the project
+
+Do **not** use for architecture decisions.
+
+## Grok 4.5 (Default — Best Credit-to-Quality Ratio)
+
+Primary implementation model. Use for:
+
+- Implementing features and iterating quickly
+- ModuleScripts, UI, controllers, services
+- Bug fixes, refactoring, pets, shops, quests, NPCs
+
+## GPT-5.6 Sol (Use Sparingly)
+
+Strongest reasoning — use only when it pays off:
+
+- Architecture design and large system planning
+- Hard debugging, security review, performance bottlenecks
+- DataStore design, multiplayer sync, complex algorithms
+- **Final code review before merging**
+
+Avoid for simple coding tasks.
+
+## Feature Pipeline
+
+1. **Composer** (optional) — map repo, identify affected files
+2. **GPT-5.6 Sol** — design architecture, break into tasks
+3. **Grok 4.5** — implement and iterate each task
+4. **Composer** — apply repo-wide changes if needed
+5. **GPT-5.6 Sol** — review, optimize, find bugs, check security before merge
+
+## Example: New Inventory System
+
+1. Composer → scan project, list files to touch
+2. GPT-5.6 Sol → design architecture
+3. Grok 4.5 → InventoryService, controller, UI
+4. Composer → update imports across project
+5. GPT-5.6 Sol → final review before merge
+
+Full reference: `AI_MODEL_USAGE.md`

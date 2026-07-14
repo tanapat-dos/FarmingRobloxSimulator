@@ -1,0 +1,217 @@
+{
+  "name": "GrowGardenKit",
+  "tree": {
+    "$className": "DataModel",
+
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+
+      "HideWorkspaceCropMeshes": {
+        "$path": "src/server/HideWorkspaceCropMeshes.server.lua"
+      },
+
+      "Server": {
+        "$path": "src/server/Server.server.lua",
+        "CachedModules": {
+          "$path": "src/server/Server/CachedModules.lua"
+        }
+      },
+
+      "Services": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+
+        "DataService": {
+          "$path": "src/server/Services/DataService",
+          "$ignoreUnknownInstances": true
+        },
+
+        "SeedShopService": {
+          "$path": "src/server/Services/SeedShopService.lua"
+        },
+
+        "ProductService": {
+          "$path": "src/server/Services/ProductService.lua"
+        },
+
+        "InventoryService": {
+          "$path": "src/server/Services/InventoryService"
+        },
+
+        "HarvestService": {
+          "$path": "src/server/Services/HarvestService.lua"
+        },
+
+        "MutationService": {
+          "$path": "src/server/Services/MutationService.lua"
+        },
+
+        "PlotService": {
+          "$path": "src/server/Services/PlotService.lua",
+          "$ignoreUnknownInstances": true
+        },
+
+        "MoneyService": {
+          "$path": "src/server/Services/MoneyService.lua"
+        },
+
+        "RarityService": {
+          "$path": "src/server/Services/RarityService.lua"
+        },
+
+        "PetService": {
+          "$path": "src/server/Services/PetService.lua"
+        }
+      }
+    },
+
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+
+        "UIEffects": {
+          "$path": "src/client/UIEffects.client.lua"
+        },
+
+        "ProximityPrompts": {
+          "$path": "src/client/ProximityPrompts.client.lua",
+          "$ignoreUnknownInstances": true
+        },
+
+        "NPCHandler": {
+          "$path": "src/client/NPCHandler.client.lua"
+        },
+
+        "GetMouseCF": {
+          "$path": "src/client/GetMouseCF.client.lua"
+        },
+
+        "ClientEffects": {
+          "$path": "src/client/ClientEffects.client.lua"
+        },
+
+        "OwnerIcon": {
+          "$path": "src/client/OwnerIcon.client.lua"
+        },
+
+        "FriendBoost": {
+          "$path": "src/client/FriendBoost.client.lua"
+        },
+
+        "PetBoost": {
+          "$path": "src/client/PetBoost.client.lua"
+        },
+
+        "CmdrClient": {
+          "$path": "src/client/CmdrClient.client.lua"
+        },
+
+        "CropReplicator": {
+          "$className": "Folder",
+          "Main": {
+            "$path": "src/client/CropReplicator/Main.client.lua"
+          }
+        },
+
+        "PetClient": {
+          "$path": "src/client/PetClient.client.lua"
+        },
+
+        "PetBackpackClient": {
+          "$path": "src/client/PetBackpackClient.client.lua"
+        },
+
+        "FruitToolDisplay": {
+          "$path": "src/client/FruitToolDisplay.client.lua"
+        }
+      }
+    },
+
+    "StarterGui": {
+      "$ignoreUnknownInstances": true,
+      "Main": {
+        "$className": "ScreenGui",
+        "$ignoreUnknownInstances": true,
+        "TeleportManager": {
+          "$path": "src/client/TeleportManager.client.lua"
+        }
+      }
+    },
+
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+
+      "ClientSignals": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true
+      },
+
+      "Modules": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+
+        "Monetization": {
+          "$path": "src/shared/Modules/Monetization.lua"
+        },
+
+        "SeedRarity": {
+          "$path": "src/shared/Modules/SeedRarity.lua"
+        },
+
+        "FruitNameParse": {
+          "$path": "src/shared/Modules/FruitNameParse.lua"
+        },
+
+        "PlantKeyUtil": {
+          "$path": "src/shared/Modules/PlantKeyUtil.lua"
+        },
+
+        "FruitDisplayName": {
+          "$path": "src/shared/Modules/FruitDisplayName.lua"
+        },
+
+        "FruitInventoryFormat": {
+          "$path": "src/shared/Modules/FruitInventoryFormat.lua"
+        },
+
+        "HarvestRarityConfig": {
+          "$path": "src/shared/Modules/HarvestRarityConfig.lua"
+        },
+
+        "HarvestRarityEffects": {
+          "$path": "src/shared/Modules/HarvestRarityEffects.lua"
+        },
+
+        "GetFruitValue": {
+          "$path": "src/shared/Modules/GetFruitValue.lua"
+        },
+
+        "ClientEffects": {
+          "$className": "Folder",
+          "$ignoreUnknownInstances": true,
+
+          "PlantEffect": {
+            "$path": "src/shared/Modules/ClientEffects/PlantEffect.lua"
+          }
+        },
+
+        "Mutations": {
+          "$className": "Folder",
+          "$ignoreUnknownInstances": true,
+
+          "Golden": {
+            "$path": "src/shared/Modules/Mutations/Golden.lua",
+            "$ignoreUnknownInstances": true
+          },
+
+          "Rainbow": {
+            "$path": "src/shared/Modules/Mutations/Rainbow.lua",
+            "$ignoreUnknownInstances": true
+          }
+        }
+      }
+    }
+  }
+}

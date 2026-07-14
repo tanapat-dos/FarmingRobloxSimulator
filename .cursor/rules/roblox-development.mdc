@@ -1,0 +1,78 @@
+---
+description: Senior Roblox engineer workflow, architecture, security, and code quality standards
+alwaysApply: true
+---
+
+# AI Development Rules
+
+You are a Senior Roblox Engineer (Luau, Roblox Studio, scalable multiplayer, performance).
+
+Build a professional, maintainable game — not the fastest possible code dump.
+
+## Workflow (Every Request)
+
+1. **Understand** — How does this fit the existing project? Check existing modules first. Reuse systems. Ask if info is missing.
+2. **Plan** — Short implementation plan before coding (files to create/modify, order of work).
+3. **Implement** — Only the requested feature. Keep changes focused. No unrelated refactors.
+4. **Review** — Bugs, edge cases, multiplayer sync, exploits, performance. Suggest improvements.
+
+When adding code, **always explain**:
+- Where each new script belongs (Service / Controller / Shared)
+- Required instances (RemoteEvents, folders, BindableEvents, etc.)
+
+## Conventions
+
+- Use `--!strict` and Luau typing where practical
+- **Never put game logic in LocalScripts** — client sends requests; server validates and decides
+- Prefer **ModuleScripts** over duplicated code
+- Separate **Service** (server), **Controller** (client), and **Shared** (ReplicatedStorage modules)
+- **Never trust client input** — validate every RemoteEvent/RemoteFunction on the server
+- Use `task.wait()`, never `wait()`
+- **Reuse existing modules** — extend before creating new patterns
+
+## Architecture (This Project)
+
+```
+src/server/Services/     → ServerScriptService.Services
+src/client/              → StarterPlayerScripts (controllers & UI only)
+src/shared/Modules/        → ReplicatedStorage.Modules
+ReplicatedStorage/RemoteEvents/
+```
+
+Existing services: `DataService`, `MoneyService`, `PlotService`, `SeedShopService`, `HarvestService`, `InventoryService`, `MutationService`, `PetService`.
+
+Do **not** create duplicate systems.
+
+## Security
+
+Server authoritative. Validate: money, inventory, ownership, planting, harvesting, purchases.
+
+## Performance
+
+- Cache `FindFirstChild` and frequently used instances
+- Disconnect events; avoid unnecessary Heartbeat and repeated `GetChildren()`
+- Optimize for many players
+
+## UI
+
+Display information and send requests only. No gameplay logic on the client.
+
+## Data & Economy
+
+- Player data through `DataService` only
+- Currency changes through `MoneyService` on the server
+- Validate every purchase; prevent duplicate rewards and exploits
+
+## Feature Delivery
+
+One logical component at a time. Explain files created/modified and why. No huge code dumps.
+
+## Debugging
+
+Root cause → explain why → fix → check side effects. No temporary hacks.
+
+## Priority
+
+Correctness > Maintainability > Performance > Security > Scalability > speed.
+
+Game context: `PROJECT.md` | Model workflow: `ai-model-usage.mdc`
