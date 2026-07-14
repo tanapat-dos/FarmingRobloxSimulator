@@ -119,6 +119,10 @@
           "$path": "src/client/PetClient.client.lua"
         },
 
+        "PetRollAnimation": {
+          "$path": "src/client/PetRollAnimation.client.lua"
+        },
+
         "PetBackpackClient": {
           "$path": "src/client/PetBackpackClient.client.lua"
         },
@@ -186,6 +190,14 @@
 
         "GetFruitValue": {
           "$path": "src/shared/Modules/GetFruitValue.lua"
+        },
+
+        "ShopStock": {
+          "$path": "src/shared/Modules/ShopStock.lua"
+        },
+
+        "EconomyBalance": {
+          "$path": "src/shared/Modules/EconomyBalance.lua"
         },
 
         "ClientEffects": {

@@ -1,15 +1,10 @@
 local debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CollectionService = game:GetService("CollectionService")
-local Workspace = game:GetService("Workspace")
 
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local cachedModules = require(game.ServerScriptService.Server.CachedModules)
 local plotService = cachedModules.Cache.PlotService
 local inventoryService = cachedModules.Cache.InventoryService
-local ToolData = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ToolData"))
-
-local GearShop = Workspace:WaitForChild("Shops").GearShop:WaitForChild("TPPart")
 
 local Activator = {}
 
@@ -41,7 +36,10 @@ tool.Activated:Connect(function()
 			elseif toolName == "Trowel" then
 				print("⛏️ Digging with trowel!")
 			elseif toolName == "RecallWrench" then
-				Player.Character:WaitForChild("HumanoidRootPart").Position = GearShop.Position
+				local tpPart = playerPlot:FindFirstChild("TPPart")
+				if tpPart then
+					Player.Character:WaitForChild("HumanoidRootPart").Position = tpPart.Position
+				end
 				print("Recalled")
 			else
 				warn("⚠️ Gear not recognized:", toolName)

@@ -9,6 +9,7 @@ local modules = replicatedStorage:WaitForChild("Modules")
 
 local seedModule = require(modules.SeedData)
 local plantKeyUtil = require(modules.PlantKeyUtil)
+local EconomyBalance = require(modules.EconomyBalance)
 local harvestRarityEffects = require(modules.HarvestRarityEffects)
 local plantsfolder = assets.Plants
 
@@ -275,8 +276,13 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 		end
 
 		local totalTime = math.max(1, growthTimeValue.Value)
-		local elapsed = os.time() - datePlanted.Value
-		local remaining = math.max(0, totalTime - elapsed)
+		local growthReduction = player:GetAttribute("PetGrowthReduction")
+		if typeof(growthReduction) ~= "number" then
+			growthReduction = 0
+		end
+		local effectiveTime = EconomyBalance.getEffectiveGrowthTime(totalTime, growthReduction)
+		local remaining = effectiveTime * (1 - growthPercentage.Value / 100)
+		remaining = math.max(0, remaining)
 		if remaining <= 0 and growthPercentage.Value < 100 then
 			label.Text = "🌱 Almost ready..."
 		else
@@ -286,6 +292,7 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 
 	refresh()
 	growthPercentage.Changed:Connect(refresh)
+	player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
 
 	task.spawn(function()
 		while billboard.Parent and growthPercentage.Value < 100 do

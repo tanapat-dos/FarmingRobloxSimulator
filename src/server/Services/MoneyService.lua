@@ -115,6 +115,7 @@ function Service.dataLoaded(player: Player)
 	leaderstats.Parent = player
 	player:SetAttribute("FriendBoost", 1)
 	player:SetAttribute("PetBoost", 1)
+	player:SetAttribute("PetGrowthReduction", 0)
 	Service.updateCashCount(player)
 	updateFriendBoost(player)
 end

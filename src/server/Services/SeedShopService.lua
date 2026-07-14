@@ -11,7 +11,7 @@ local IS_STUDIO = RunService:IsStudio()
 local studioStock = nil -- in-memory stock for Studio mode
 
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
-local ToolData = require(ReplicatedStorage:WaitForChild("Modules").ToolData)
+local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
@@ -199,73 +199,52 @@ local function isShopSeed(seedName: string): boolean
 	return seedStorage:FindFirstChild(seedName) ~= nil
 end
 
-local function GenerateStock()
-	local SETTINGS = {
-		STOCK_RANGE = {
-			Common = { Min = 15, Max = 25 },
-			Uncommon = { Min = 10, Max = 20 },
-			Rare = { Min = 5, Max = 15 },
-			Legendary = { Min = 1, Max = 3 },
-			Mythical = { Min = 1, Max = 2 },
-			Divine = { Min = 1, Max = 1 },
-			Prismatic = { Min = 1, Max = 1 },
-		},
-		CHANCE_BASED_RARITIES = {
-			Legendary = 5,
-			Mythical = 2,
-			Divine = 0.5,
-			Prismatic = 0.1,
-		}
-	}
+local GUARANTEED_SEEDS = {
+	["Carrot Seed"] = true,
+	["Wheat Seed"] = true,
+}
 
-	local seedStock, gearStock = {}, {}
+local function GenerateStock()
+	local candidates = {}
 
 	for _, seedName in ipairs(SeedData.getSeedOrder()) do
 		local seed = SeedData.getData(seedName)
 		if seed and isShopSeed(seedName) then
 			local rarity = seed:FindFirstChild("Rarity") and seed.Rarity.Value or "Common"
-			local range = SETTINGS.STOCK_RANGE[rarity] or { Min = 5, Max = 10 }
-			local guaranteed = not SETTINGS.CHANCE_BASED_RARITIES[rarity]
-			local available = guaranteed or (math.random() * 100 <= SETTINGS.CHANCE_BASED_RARITIES[rarity])
+			local price = seed:FindFirstChild("Price") and seed.Price.Value or 10
+			local baseValue = seed:FindFirstChild("BaseValue") and seed.BaseValue.Value or price
+			local available = GUARANTEED_SEEDS[seedName] or ShopStock.rollAppearance(rarity)
 
-			seedStock[seedName] = {
-				Name = seed:FindFirstChild("Name") and seed.Name.Value or seedName,
-				Price = seed:FindFirstChild("Price") and seed.Price.Value or 10,
-				Rarity = rarity,
-				StockAmount = available and math.random(range.Min, range.Max) or 0,
-				IsInStock = available,
-				LayoutOrder = seed:FindFirstChild("LayoutOrder") and seed.LayoutOrder.Value or 0,
-				DevProduct = seed:FindFirstChild("DevProduct") and seed.DevProduct.Value or 0
-			}
+			if available then
+				local range = ShopStock.getStockRange(rarity, ShopStock.SEED_STOCK_RANGE)
+				table.insert(candidates, {
+					Key = seedName,
+					Name = seed:FindFirstChild("Name") and seed.Name.Value or seedName,
+					Price = price,
+					Rarity = rarity,
+					PriceRatio = ShopStock.computePriceRatio(baseValue, price),
+					StockAmount = math.random(range.Min, range.Max),
+					IsInStock = true,
+					DevProduct = seed:FindFirstChild("DevProduct") and seed.DevProduct.Value or 0,
+				})
+			end
 		end
 	end
 
-	for _, gearName in ipairs(ToolData.getToolOrder()) do
-		local gear = ToolData.getData(gearName)
-		if gear then
-			local rarity = gear:FindFirstChild("Rarity") and gear.Rarity.Value or "Common"
-			local range = SETTINGS.STOCK_RANGE[rarity] or { Min = 2, Max = 4 }
-			local guaranteed = not SETTINGS.CHANCE_BASED_RARITIES[rarity]
-			local available = guaranteed or (math.random() * 100 <= SETTINGS.CHANCE_BASED_RARITIES[rarity])
+	ShopStock.assignLayoutOrder(candidates)
+	return ShopStock.entriesToMap(candidates)
+end
 
-			gearStock[gearName] = {
-				Name = gear:FindFirstChild("Name") and gear.Name.Value or gearName,
-				Price = gear:FindFirstChild("Price") and gear.Price.Value or 10,
-				Rarity = rarity,
-				StockAmount = available and math.random(range.Min, range.Max) or 0,
-				IsInStock = available,
-				LayoutOrder = gear:FindFirstChild("LayoutOrder") and gear.LayoutOrder.Value or 0,
-				DevProduct = gear:FindFirstChild("DevProduct") and gear.DevProduct.Value or 0
-			}
-		end
+local function normalizeStock(stock: any)
+	if type(stock) == "table" and stock.Seeds then
+		return stock.Seeds
 	end
-
-	return { Seeds = seedStock, Gears = gearStock }
+	return stock
 end
 
 function Service:GetCurrentStock()
 	if IS_STUDIO then
-		return studioStock
+		return normalizeStock(studioStock)
 	end
 	local memoryStore = MemoryStoreService:GetSortedMap("GLOBAL_SHOP")
 	local success, raw = pcall(function()
@@ -273,7 +252,7 @@ function Service:GetCurrentStock()
 	end)
 	if success and raw then
 		local decoded = HttpService:JSONDecode(raw)
-		return decoded
+		return normalizeStock(decoded)
 	end
 	return nil
 end
@@ -319,15 +298,18 @@ function Service:BroadcastRestock()
 		end)
 	end
 
-	RemoteEvents.ResetSeedShop:FireAllClients(stock.Seeds)
-	RemoteEvents.ResetGearShop:FireAllClients(stock.Gears)
+	RemoteEvents.ResetSeedShop:FireAllClients(stock)
+
+	local petService = cachedModules.Cache.PetService
+	if petService and petService.BroadcastRestock then
+		petService:BroadcastRestock()
+	end
 end
 
 local function OnRestockMessage()
 	local stock = Service:GetCurrentStock()
 	if stock then
-		RemoteEvents.ResetSeedShop:FireAllClients(stock.Seeds)
-		RemoteEvents.ResetGearShop:FireAllClients(stock.Gears)
+		RemoteEvents.ResetSeedShop:FireAllClients(stock)
 	end
 end
 
@@ -357,7 +339,6 @@ function Service.init()
 			local remaining = IS_STUDIO and restockInterval or Service:GetTimeUntilRestock()
 			while remaining > 0 do
 				RemoteEvents.SeedShopTimer:FireAllClients(FormatTime(remaining))
-				RemoteEvents.GearShopTimer:FireAllClients(FormatTime(remaining))
 				task.wait(1)
 				remaining -= 1
 			end
@@ -371,8 +352,7 @@ function Service.init()
 			for _ = 1, tries do
 				local stock = Service:GetCurrentStock()
 				if stock then
-					RemoteEvents.ResetSeedShop:FireClient(player, stock.Seeds)
-					RemoteEvents.ResetGearShop:FireClient(player, stock.Gears)
+					RemoteEvents.ResetSeedShop:FireClient(player, stock)
 					return
 				end
 				task.wait(1)
@@ -385,7 +365,7 @@ function Service.init()
 		if not moneyService.hasEnoughCash(player, price) then return end
 		local stock = Service:GetCurrentStock()
 		if not stock then return end
-		local crop = stock.Seeds[cropName]
+		local crop = stock[cropName]
 		if not crop or crop.StockAmount <= 0 then return end
 		moneyService.removeCash(player, price)
 		crop.StockAmount -= 1
@@ -395,17 +375,6 @@ function Service.init()
 			Service:SaveStockToMemoryStore(stock)
 		end
 		Service.giveSeed(player, cropName, 1)
-	end)
-
-	RemoteEvents.BuyGear.OnServerEvent:Connect(function(player, gearName, price)
-		if player:GetAttribute("DataLoaded") ~= true then return end
-		if not moneyService.hasEnoughCash(player, price) then return end
-		local stock = Service:GetCurrentStock()
-		if not stock then return end
-		local gear = stock.Gears[gearName]
-		if not gear or gear.StockAmount <= 0 then return end
-		moneyService.removeCash(player, price)
-		Service.giveSeed(player, gearName, 1)
 	end)
 end
 

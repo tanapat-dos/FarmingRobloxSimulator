@@ -1,5 +1,7 @@
+local EconomyBalance = require(game:GetService("ReplicatedStorage"):WaitForChild("Modules").EconomyBalance)
+
 local template = {
-	Cash = 1000,
+	Cash = EconomyBalance.STARTING_CASH,
 	Inventory = {},
 	PlotData = {},
 	OwnedPets = {},

@@ -218,29 +218,6 @@ end
 
 closeShopBtn.MouseButton1Click:Connect(hideShopUI)
 
---// Gear Shop GUI
-
-local GearShopScreenGui = PlayerGui:WaitForChild("GearShop")
-local GearShopUI = GearShopScreenGui:WaitForChild("Frame")
-local closeGearShopBtn = GearShopUI:WaitForChild("CloseShop")
-local function showGearShopUI()
-	GearShopScreenGui.DisplayOrder = 10
-	pcall(setHudButtonsVisible, false)
-	GearShopUI.Size = UDim2.new(0,0,0,0)
-	GearShopUI.Visible = true
-	toggleBlur(true)
-	TweenService:Create(GearShopUI, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0.414, 0, 0.8, 0)}):Play()
-end
-local function hideGearShopUI()
-	TweenService:Create(GearShopUI, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0)}):Play()
-	toggleBlur(false)
-	task.delay(0.2, function()
-		GearShopUI.Visible = false
-		pcall(setHudButtonsVisible, true)
-	end)
-end
-closeGearShopBtn.MouseButton1Click:Connect(hideGearShopUI)
-
 --// response
 local function respondAfter(seconds, message, reenablePrompts)
 	if currentNPC then
@@ -384,16 +361,6 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 		task.delay(1.5, function()
 			Dialogue:HideAll()
 			createSellGUI()
-		end)
-	elseif prompt.Name == "OpenGearShop" then
-		local npc = prompt.Parent.Parent
-		Dialogue:NPC(npc, "Let me show you the gears:")
-		task.delay(1.5, function()
-			Dialogue:HideAll()
-			showGearShopUI()
-			closeGearShopBtn.MouseButton1Click:Once(function()
-				toggleAllPrompts(true)
-			end)
 		end)
 	elseif prompt.Name == "OpenPetShop" then
 		local npc = prompt.Parent.Parent

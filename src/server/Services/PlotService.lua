@@ -9,6 +9,7 @@ local modules = replicatedStorage:WaitForChild("Modules")
 
 local seedDataModule = require(modules.SeedData)
 local plantKeyUtil = require(modules.PlantKeyUtil)
+local EconomyBalance = require(modules.EconomyBalance)
 
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
@@ -464,7 +465,12 @@ function Service.init()
 							folder.CanHarvest.Value = true
 						end
 					else
-						local growthTime = math.max(1, foundSeed.GrowthTime.Value)
+						local baseGrowthTime = math.max(1, foundSeed.GrowthTime.Value)
+						local growthReduction = player:GetAttribute("PetGrowthReduction")
+						if typeof(growthReduction) ~= "number" then
+							growthReduction = 0
+						end
+						local growthTime = EconomyBalance.getEffectiveGrowthTime(baseGrowthTime, growthReduction)
 						if os.time() - lastGrowthInc.Value >= 1 then
 							lastGrowthInc.Value = os.time()
 							growthPercentage.Value = math.clamp(
