@@ -27,14 +27,20 @@ local Service = {
 }
 
 function Service.getRandomPlantSize(name: string, extraData: any)
-	return Random.new():NextNumber(1,3)
+	-- Was uniform 1-3: plots read as chaos with random giants everywhere.
+	-- Keep gentle variety; fruit size (below) carries the "giant crop" fantasy.
+	return Random.new():NextNumber(1, 1.75)
 end
 
 function Service.getRandomFruitSize(name: string, extraData: any)
 	if name == "Carrot Seed" then
 		return 1
 	end
-	return Random.new():NextNumber(1,3)
+	-- Bias low so giant fruits (~2.5x+) are rare and exciting instead of
+	-- constant. This also feeds sell value (weight^2), so the squared curve
+	-- keeps big harvests a jackpot rather than the average case.
+	local r = Random.new():NextNumber(0, 1)
+	return 1 + (r ^ 2.2) * 2
 end
 
 function Service.generateKey(prefix:string)

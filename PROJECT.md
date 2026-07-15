@@ -34,6 +34,7 @@
 - `ProximityPrompts` — NPC dialogue, shop/sell interactions
 - `TeleportManager` — HUD teleport buttons (garden, seeds, sell, pets)
 - `WeatherClient` — rain particles, storm lightning, lighting mood, weather HUD banner
+- `UITheme` — runtime theme pass (rounded corners, strokes, Gotham fonts, button hover/press feedback)
 - `PetClient` — Pet shop UI, equip, pet follow
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`

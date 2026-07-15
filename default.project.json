@@ -137,6 +137,10 @@
 
         "WeatherClient": {
           "$path": "src/client/WeatherClient.client.lua"
+        },
+
+        "UITheme": {
+          "$path": "src/client/UITheme.client.lua"
         }
       }
     },
