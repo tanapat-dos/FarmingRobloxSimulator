@@ -149,20 +149,30 @@ local function buildAltar()
 	local model = Instance.new("Model")
 	model.Name = "RebirthAltar"
 
+	-- Tapered two-tier pedestal so the base doesn't dwarf the crystal
 	local pedestal = Instance.new("Part")
 	pedestal.Name = "Pedestal"
-	pedestal.Size = Vector3.new(4, 1.2, 4)
-	pedestal.CFrame = baseCFrame * CFrame.new(0, 0.6, 0)
+	pedestal.Size = Vector3.new(3.2, 0.9, 3.2)
+	pedestal.CFrame = baseCFrame * CFrame.new(0, 0.45, 0)
 	pedestal.Material = Enum.Material.Slate
 	pedestal.Color = Color3.fromRGB(90, 94, 105)
 	pedestal.Anchored = true
 	pedestal.Parent = model
 
+	local tier = Instance.new("Part")
+	tier.Name = "PedestalTier"
+	tier.Size = Vector3.new(2.2, 0.7, 2.2)
+	tier.CFrame = baseCFrame * CFrame.new(0, 1.25, 0)
+	tier.Material = Enum.Material.Slate
+	tier.Color = Color3.fromRGB(104, 108, 120)
+	tier.Anchored = true
+	tier.Parent = model
+
 	local crystal = Instance.new("Part")
 	crystal.Name = "Crystal"
 	crystal.Shape = Enum.PartType.Wedge
 	crystal.Size = Vector3.new(1.4, 2.6, 1.4)
-	crystal.CFrame = baseCFrame * CFrame.new(0, 2.6, 0) * CFrame.Angles(0, math.rad(35), 0)
+	crystal.CFrame = baseCFrame * CFrame.new(0, 2.9, 0) * CFrame.Angles(0, math.rad(35), 0)
 	crystal.Material = Enum.Material.Neon
 	crystal.Color = Color3.fromRGB(190, 140, 255)
 	crystal.Anchored = true

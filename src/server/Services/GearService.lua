@@ -83,14 +83,37 @@ local function buildKiosk()
 	local model = Instance.new("Model")
 	model.Name = "GearKiosk"
 
+	-- Market-stall proportions: counter fitted to the crates on it, with
+	-- rear posts holding a slanted awning so the stand reads as a shop.
 	local counter = Instance.new("Part")
 	counter.Name = "Counter"
-	counter.Size = Vector3.new(6, 1, 3)
+	counter.Size = Vector3.new(5.2, 1, 2.4)
 	counter.CFrame = baseCFrame * CFrame.new(0, 0.5, 0)
 	counter.Material = Enum.Material.WoodPlanks
 	counter.Color = Color3.fromRGB(124, 92, 60)
 	counter.Anchored = true
 	counter.Parent = model
+
+	for _, sideX in { -2.3, 2.3 } do
+		local awningPost = Instance.new("Part")
+		awningPost.Name = "AwningPost"
+		awningPost.Size = Vector3.new(0.4, 4.6, 0.4)
+		awningPost.CFrame = baseCFrame * CFrame.new(sideX, 2.3, -0.9)
+		awningPost.Material = Enum.Material.Wood
+		awningPost.Color = Color3.fromRGB(105, 78, 52)
+		awningPost.Anchored = true
+		awningPost.Parent = model
+	end
+
+	local awning = Instance.new("Part")
+	awning.Name = "Awning"
+	awning.Size = Vector3.new(5.8, 0.25, 3.4)
+	awning.CFrame = baseCFrame * CFrame.new(0, 4.75, 0.1) * CFrame.Angles(math.rad(-10), 0, 0)
+	awning.Material = Enum.Material.Fabric
+	awning.Color = Color3.fromRGB(178, 90, 74)
+	awning.Anchored = true
+	awning.CanCollide = false
+	awning.Parent = model
 
 	local index = 0
 	local gearNames = {}
@@ -106,7 +129,7 @@ local function buildKiosk()
 		local crate = Instance.new("Part")
 		crate.Name = gearName
 		crate.Size = Vector3.new(1.6, 1.6, 1.6)
-		crate.CFrame = baseCFrame * CFrame.new(-1.6 + index * 3.2, 1.8, 0)
+		crate.CFrame = baseCFrame * CFrame.new(-1.25 + index * 2.5, 1.8, 0)
 		crate.Material = Enum.Material.Wood
 		crate.Color = config.color or Color3.fromRGB(124, 92, 60)
 		crate.Anchored = true

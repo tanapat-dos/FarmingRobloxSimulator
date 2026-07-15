@@ -86,6 +86,10 @@ function Dialogue:NPC(model, text)
 	gui.Adornee = root
 	gui.Parent = model
 	gui.Enabled = true
+	-- Keep the bubble readable: render above world geometry and just over
+	-- the NPC's head so shop roofs never clip or occlude it.
+	gui.AlwaysOnTop = true
+	gui.StudsOffset = Vector3.new(0, 3, 0)
 
 	local frame = gui:FindFirstChild("Frame")
 	local label = frame and frame:FindFirstChildWhichIsA("TextLabel")
@@ -104,6 +108,8 @@ function Dialogue:Player(text)
 	gui.Adornee = root
 	gui.Parent = player:WaitForChild("PlayerGui")
 	gui.Enabled = true
+	gui.AlwaysOnTop = true
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
 
 	local frame = gui:FindFirstChild("Frame")
 	local label = frame and frame:FindFirstChildWhichIsA("TextLabel")

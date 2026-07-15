@@ -309,28 +309,44 @@ local function buildBoard()
 	local model = Instance.new("Model")
 	model.Name = "OrderBoard"
 
+	-- Proportions: posts sit OUTSIDE the plank (post inner face flush with
+	-- the board edge), plus a cap rail — reads as a built notice board
+	-- instead of a floating plank.
+	local boardWidth = 5.2
+	local postSize = 0.6
+	local postX = boardWidth / 2 + postSize / 2
+
 	local function post(offsetX: number)
 		local part = Instance.new("Part")
 		part.Name = "Post"
-		part.Size = Vector3.new(0.5, 5, 0.5)
-		part.CFrame = baseCFrame * CFrame.new(offsetX, 2.5, 0)
+		part.Size = Vector3.new(postSize, 5.6, postSize)
+		part.CFrame = baseCFrame * CFrame.new(offsetX, 2.8, 0)
 		part.Material = Enum.Material.Wood
 		part.Color = Color3.fromRGB(105, 78, 52)
 		part.Anchored = true
 		part.Parent = model
 		return part
 	end
-	post(-2.4)
-	post(2.4)
+	post(-postX)
+	post(postX)
 
 	local board = Instance.new("Part")
 	board.Name = "Board"
-	board.Size = Vector3.new(5.6, 3.4, 0.4)
-	board.CFrame = baseCFrame * CFrame.new(0, 4.2, 0)
+	board.Size = Vector3.new(boardWidth, 3.2, 0.4)
+	board.CFrame = baseCFrame * CFrame.new(0, 4, 0)
 	board.Material = Enum.Material.WoodPlanks
 	board.Color = Color3.fromRGB(124, 92, 60)
 	board.Anchored = true
 	board.Parent = model
+
+	local cap = Instance.new("Part")
+	cap.Name = "Cap"
+	cap.Size = Vector3.new(boardWidth + postSize * 2 + 0.4, 0.35, 0.9)
+	cap.CFrame = baseCFrame * CFrame.new(0, 5.78, 0)
+	cap.Material = Enum.Material.Wood
+	cap.Color = Color3.fromRGB(96, 70, 46)
+	cap.Anchored = true
+	cap.Parent = model
 
 	for _, faceEnum in { Enum.NormalId.Front, Enum.NormalId.Back } do
 		local gui = Instance.new("SurfaceGui")
