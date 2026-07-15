@@ -27,6 +27,7 @@
 | Mutations | `MutationService` | Golden / Rainbow mutation logic |
 | Pets | `PetService` | Gacha rolls, equip, pet cash boost |
 | Weather | `WeatherService` | Sunny/Rain/Thunderstorm cycle; applies Wet (x2) / Shocked (x8) environmental mutations to fruits |
+| Orders | `OrderService` | NPC order board: rotating deliver-N-crops orders at a premium; board spawns procedurally by the sell shop |
 | Monetization | `ProductService` | DevProduct purchases |
 
 **Client scripts (controllers):**
@@ -35,6 +36,7 @@
 - `TeleportManager` — HUD teleport buttons (garden, seeds, sell, pets)
 - `WeatherClient` — rain particles, storm lightning, lighting mood, weather HUD banner
 - `UITheme` — runtime theme pass (rounded corners, strokes, Gotham fonts, button hover/press feedback)
+- `OrderBoardClient` — procedural order-board panel (open via the board's ProximityPrompt)
 - `PetClient` — Pet shop UI, equip, pet follow
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`

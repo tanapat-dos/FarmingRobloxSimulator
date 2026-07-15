@@ -65,6 +65,10 @@
 
         "WeatherService": {
           "$path": "src/server/Services/WeatherService.lua"
+        },
+
+        "OrderService": {
+          "$path": "src/server/Services/OrderService.lua"
         }
       }
     },
@@ -141,6 +145,10 @@
 
         "UITheme": {
           "$path": "src/client/UITheme.client.lua"
+        },
+
+        "OrderBoardClient": {
+          "$path": "src/client/OrderBoardClient.client.lua"
         }
       }
     },

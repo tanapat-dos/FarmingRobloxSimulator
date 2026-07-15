@@ -6,6 +6,7 @@ local template = {
 	PlotData = {},
 	OwnedPets = {},
 	EquippedPet = nil,
+	OrderStats = { Completed = 0 },
 }
 
 return template
