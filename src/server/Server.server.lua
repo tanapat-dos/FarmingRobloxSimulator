@@ -40,7 +40,7 @@ local function ensureRemoteEvent(name: string)
 	end
 end
 
-for _, remoteName in { "PetUse", "PetFollowUpdate", "UpdatePetBoost", "UpdateFriendBoost" } do
+for _, remoteName in { "PetUse", "PetFollowUpdate", "UpdatePetBoost", "UpdateFriendBoost", "Notify" } do
 	ensureRemoteEvent(remoteName)
 end
 

@@ -7,6 +7,16 @@ local EconomyBalance = {}
 
 EconomyBalance.STARTING_CASH = 500
 
+-- Plot progression: every garden has 8 physical soil beds; bed 1 is free,
+-- beds 2..maxOwned are purchasable in order, the rest stay reserved.
+EconomyBalance.PLOTS = {
+	startOwned = 1,
+	maxOwned = 6,
+	cropsPerPlot = 10,
+	-- prices[n] = cost of the nth bed (index 1 is the free starter bed)
+	prices = { 0, 2500, 10000, 30000, 75000, 150000 },
+}
+
 EconomyBalance.EGG_ORDER = {
 	"Common Egg",
 	"Uncommon Egg",

@@ -149,6 +149,10 @@
 
         "OrderBoardClient": {
           "$path": "src/client/OrderBoardClient.client.lua"
+        },
+
+        "Toasts": {
+          "$path": "src/client/Toasts.client.lua"
         }
       }
     },

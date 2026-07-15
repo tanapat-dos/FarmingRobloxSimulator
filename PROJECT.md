@@ -20,7 +20,7 @@
 |--------|--------|------|
 | Player data | `DataService` | Profile load/save, player template, `OwnedPets`, `EquippedPet` |
 | Economy | `MoneyService` | Cash, selling, friend boost, pet boost |
-| Plots | `PlotService` | Plot assignment, plant spawning on player farms |
+| Plots | `PlotService` | Plot assignment, plant spawning, bed progression (start 1 bed, buy up to 6 in-garden, 10 crops per bed) |
 | Seeds & shop | `SeedShopService` | Shop stock, restock, seed purchases |
 | Inventory | `InventoryService` | Tools, seeds, gear activators |
 | Harvesting | `HarvestService` | Server-side fruit harvest validation |
@@ -37,6 +37,7 @@
 - `WeatherClient` — rain particles, storm lightning, lighting mood, weather HUD banner
 - `UITheme` — runtime theme pass (rounded corners, strokes, Gotham fonts, button hover/press feedback)
 - `OrderBoardClient` — procedural order-board panel (open via the board's ProximityPrompt)
+- `Toasts` — top-center notification popups for the `Notify` remote (plot purchases, capacity warnings)
 - `PetClient` — Pet shop UI, equip, pet follow
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`

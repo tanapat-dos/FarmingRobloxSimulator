@@ -12,6 +12,7 @@ local studioStock = nil -- in-memory stock for Studio mode
 
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
 local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
+local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
@@ -95,6 +96,24 @@ function Service.plantSeed(player: Player, seedName: string, location: CFrame, p
 					Debris:AddItem(debounce, 0.5)
 
 					local plotData = playerData.PlotData
+
+					-- Plot capacity: owned beds x cropsPerPlot
+					local plotService = cachedModules.Cache.PlotService
+					local plantCount = 0
+					for _ in plotData do
+						plantCount += 1
+					end
+					local capacity = plotService.getOwnedBedCount(player) * EconomyBalance.PLOTS.cropsPerPlot
+					if plantCount >= capacity then
+						local notifyRemote = RemoteEvents:FindFirstChild("Notify")
+						if notifyRemote then
+							notifyRemote:FireClient(player,
+								("Your plots are full (%d/%d)! Harvest crops or buy another plot."):format(plantCount, capacity),
+								"error")
+						end
+						return
+					end
+
 					-- Check if Seed too close too plant
 					local isTooClose = Service.isCloseToPlant(
 						plotService.getPlot(player).ReferencePoint,
