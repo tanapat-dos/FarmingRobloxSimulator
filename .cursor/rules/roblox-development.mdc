@@ -67,6 +67,22 @@ Display information and send requests only. No gameplay logic on the client.
 
 One logical component at a time. Explain files created/modified and why. No huge code dumps.
 
+## Rojo ↔ Studio Sync (MCP)
+
+**`src/` is the source of truth.** Studio place scripts must match Rojo files.
+
+When pushing script changes to Studio via MCP:
+
+1. **Always use `manage_scripts` → `set_source` with the full file** — copy the complete Rojo source, not a snippet.
+2. **Never use `edit_replace`, `edit_insert`, or line-range patches** on ModuleScripts or long scripts. Partial edits often drop `end`/`end)` and corrupt nested blocks (e.g. `Expected 'end' … got <eof>`).
+3. **After every Studio script write**, verify:
+   - Line count is within ~5 lines of the Rojo file
+   - No duplicate blocks or orphaned lines (search for doubled `if`/`function`/`end`)
+   - Play-test or `get_source` confirms the module ends with `return ModuleName`
+4. **Prefer Rojo sync** (`rojo serve` + Studio plugin) when the user has it running; use MCP `set_source` only when Rojo sync is unavailable.
+
+If a Studio script fails to load, **replace the entire script** from Rojo — do not patch the broken file in place.
+
 ## Debugging
 
 Root cause → explain why → fix → check side effects. No temporary hacks.

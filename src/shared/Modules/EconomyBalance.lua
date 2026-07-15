@@ -105,7 +105,7 @@ EconomyBalance.EGGS = {
 -- BaseValue drives sell price via GetFruitValue (baseValue * weight^2 * mutations * rarity).
 -- Price and GrowthTime increase per tier; ROI improves slowly to reward progression.
 EconomyBalance.CROPS = {
-	["Carrot Seed"] = { price = 15, baseValue = 6, growthTime = 120, rarity = "Common" },
+	["Carrot Seed"] = { price = 15, baseValue = 6, growthTime = 5, rarity = "Common" },
 	["Radish Seed"] = { price = 20, baseValue = 8, growthTime = 180, rarity = "Common" },
 	["Wheat Seed"] = { price = 25, baseValue = 10, growthTime = 240, rarity = "Common" },
 	["Lettuce Seed"] = { price = 30, baseValue = 12, growthTime = 270, rarity = "Common" },
