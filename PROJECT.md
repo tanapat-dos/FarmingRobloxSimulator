@@ -28,6 +28,8 @@
 | Pets | `PetService` | Gacha rolls, equip, pet cash boost |
 | Weather | `WeatherService` | Sunny/Rain/Thunderstorm cycle; applies Wet (x2) / Shocked (x8) environmental mutations to fruits |
 | Orders | `OrderService` | NPC order board: rotating deliver-N-crops orders at a premium; board spawns procedurally by the sell shop |
+| Rebirth | `RebirthService` | Prestige loop: escalating cost resets cash/seeds/crops/plots (pets kept) for +25% permanent sell boost per rebirth; procedural altar by the sell shop |
+| Gear | `GearService` | Supply kiosk by the seed shop: Fertilizer (instant grow/ripen) and Mutation Spray (guaranteed Golden, 25% Rainbow) — procedural consumable tools |
 | Monetization | `ProductService` | DevProduct purchases |
 
 **Client scripts (controllers):**

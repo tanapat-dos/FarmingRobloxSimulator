@@ -69,6 +69,14 @@
 
         "OrderService": {
           "$path": "src/server/Services/OrderService.lua"
+        },
+
+        "RebirthService": {
+          "$path": "src/server/Services/RebirthService.lua"
+        },
+
+        "GearService": {
+          "$path": "src/server/Services/GearService.lua"
         }
       }
     },

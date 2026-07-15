@@ -17,6 +17,27 @@ EconomyBalance.PLOTS = {
 	prices = { 0, 2500, 10000, 30000, 75000, 150000 },
 }
 
+-- Rebirth: reset cash/seeds/crops/plots for a permanent sell multiplier.
+EconomyBalance.REBIRTH = {
+	baseCost = 250000,
+	costMult = 4, -- rebirth N costs baseCost * costMult^N
+	boostPerRebirth = 0.25, -- +25% permanent sell value per rebirth
+}
+
+-- Procedural gear (no .rbxl assets: tools are built in code like pet tools).
+EconomyBalance.GEAR = {
+	["Fertilizer"] = {
+		price = 750,
+		color = Color3.fromRGB(133, 97, 61),
+		description = "Instantly finishes growing your nearest crop.",
+	},
+	["Mutation Spray"] = {
+		price = 3500,
+		color = Color3.fromRGB(120, 220, 255),
+		description = "Sprays your nearest crop: guaranteed Golden, 25% Rainbow.",
+	},
+}
+
 EconomyBalance.EGG_ORDER = {
 	"Common Egg",
 	"Uncommon Egg",

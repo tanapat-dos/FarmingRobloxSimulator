@@ -8,6 +8,7 @@ local seedStorage = ServerStorage:WaitForChild("CropSeeds")
 local toolStorage = ServerStorage:WaitForChild("Tools")
 
 local seedDataModule = require(modules.SeedData)
+local EconomyBalance = require(modules.EconomyBalance)
 local fruitNameParser = require(modules.FruitNameParse)
 local fruitDisplayName = require(modules.FruitDisplayName)
 local fruitInventoryFormat = require(modules.FruitInventoryFormat)
@@ -157,8 +158,37 @@ function Service.createNewTool(player: Player, toolName: string)
 	local itemData = playerData and playerData.Inventory[toolName]
 	if not itemData then return end
 
+	-- ✅ Procedural gear (Fertilizer etc.) — tool built entirely in code
+	local proceduralGear = EconomyBalance.GEAR and EconomyBalance.GEAR[toolName]
+	if proceduralGear then
+		local tool = Instance.new("Tool")
+		tool.Name = toolName .. " (X" .. tostring(itemData.Count) .. ")"
+		tool.ToolTip = proceduralGear.description or toolName
+		tool.RequiresHandle = true
+		tool.CanBeDropped = false
+		tool:SetAttribute("Name", toolName)
+		tool:SetAttribute("Count", itemData.Count)
+		tool:SetAttribute("isGear", true)
+
+		local handle = Instance.new("Part")
+		handle.Name = "Handle"
+		handle.Size = Vector3.new(0.9, 1.1, 0.9)
+		handle.Material = Enum.Material.SmoothPlastic
+		handle.Color = proceduralGear.color or Color3.fromRGB(124, 92, 60)
+		handle.CanCollide = false
+		handle.Massless = true
+		handle.Parent = tool
+
+		local activator = script.GearUseActivator:Clone()
+		activator.Parent = tool
+		require(activator)
+
+		tool.Parent = player.Backpack
+		return
+	end
+
 	local gearInfo = ToolData.getData(toolName)
-	
+
 	local isGear = toolStorage:FindFirstChild(toolName)
 	local isSeed = seedStorage:FindFirstChild(toolName)
 
@@ -285,6 +315,7 @@ function Service.inventoryUpdated(player : Player, ...)
 				local seedToolName = itemUpdated
 				local isSeed = seedStorage:FindFirstChild(seedToolName)
 				local isGear = toolStorage:FindFirstChild(itemUpdated)
+					or (EconomyBalance.GEAR and EconomyBalance.GEAR[itemUpdated])
 				if isSeed then
 					local foundItem = nil
 					for _,v in player.Backpack:GetChildren() do

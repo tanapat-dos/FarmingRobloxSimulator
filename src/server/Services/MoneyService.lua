@@ -104,6 +104,9 @@ function Service.updateCashCount(player: Player)
 end
 
 function Service.dataLoaded(player: Player)
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 
@@ -112,16 +115,30 @@ function Service.dataLoaded(player: Player)
 	cash.Value = 0
 	cash.Parent = leaderstats
 
+	local rebirths = Instance.new("IntValue")
+	rebirths.Name = "Rebirths"
+	rebirths.Value = profileData and profileData.Rebirths or 0
+	rebirths.Parent = leaderstats
+
 	leaderstats.Parent = player
 	player:SetAttribute("FriendBoost", 1)
 	player:SetAttribute("PetBoost", 1)
 	player:SetAttribute("PetGrowthReduction", 0)
+	player:SetAttribute("Rebirths", profileData and profileData.Rebirths or 0)
 	Service.updateCashCount(player)
 	updateFriendBoost(player)
 end
 
 function Service.getCashMultiplier(target: Player): number
-	return (target:GetAttribute("FriendBoost") or 1) * (target:GetAttribute("PetBoost") or 1)
+	local EconomyBalance = require(modules.EconomyBalance)
+	local rebirths = target:GetAttribute("Rebirths")
+	if typeof(rebirths) ~= "number" then
+		rebirths = 0
+	end
+	local rebirthMultiplier = 1 + rebirths * EconomyBalance.REBIRTH.boostPerRebirth
+	return (target:GetAttribute("FriendBoost") or 1)
+		* (target:GetAttribute("PetBoost") or 1)
+		* rebirthMultiplier
 end
 
 function Service.giveMoney(target: Player, amount: number)
