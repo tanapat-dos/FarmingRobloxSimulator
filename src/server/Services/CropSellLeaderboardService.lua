@@ -127,10 +127,12 @@ local function getPlatformBackZ(shops: Instance, fallbackZ: number): number
 	return maxZ - PLATFORM_BACK_MARGIN
 end
 
-local function getBoardAnchor(shops: Instance): Vector3
+local function getBoardPlacement(shops: Instance): (Vector3, CFrame)
 	local anchor = shops:FindFirstChild(ANCHOR_NAME)
 	if anchor and anchor:IsA("BasePart") then
-		return anchor.Position
+		-- Anchor position = floor spot; anchor rotation = which way the sign faces.
+		local signCFrame = anchor.CFrame * CFrame.new(0, SIGN_CENTER_HEIGHT, 0)
+		return anchor.Position, signCFrame
 	end
 
 	local samplePositions: { Vector3 } = {}
@@ -165,7 +167,11 @@ local function getBoardAnchor(shops: Instance): Vector3
 	local fallbackZ = maxNpcZ + BEHIND_NPC_OFFSET
 	local boardZ = getPlatformBackZ(shops, fallbackZ)
 
-	return Vector3.new((minX + maxX) * 0.5, floorY, boardZ)
+	local floorPosition = Vector3.new((minX + maxX) * 0.5, floorY, boardZ)
+	local signCenterY = floorY + SIGN_CENTER_HEIGHT
+	local signPosition = Vector3.new(floorPosition.X, signCenterY, floorPosition.Z)
+	local viewTarget = getBoardViewTarget(shops)
+	return floorPosition, CropSellPriceBoard.getSignCFrame(signPosition, viewTarget)
 end
 
 local function getBoardViewTarget(shops: Instance): Vector3
@@ -197,13 +203,52 @@ local function makeWoodPart(name: string, size: Vector3, color: Color3?): Part
 	return part
 end
 
-local function buildBoardModel(shops: Instance, boardAnchor: Vector3)
+local function applyBoardTransform(model: Model, floorPosition: Vector3, signCFrame: CFrame)
+	local sign = model:FindFirstChild(SIGN_NAME)
+	if not sign or not sign:IsA("BasePart") then
+		return
+	end
+
+	sign.CFrame = signCFrame
+
+	local floorY = floorPosition.Y
+	local signCenterY = signCFrame.Position.Y
+	local postOffsetY = (floorY + POST_SIZE.Y * 0.5 - POST_BURY_DEPTH) - signCenterY
+	local posts = {}
+	for _, child in model:GetChildren() do
+		if child.Name == POST_NAME and child:IsA("BasePart") then
+			table.insert(posts, child)
+		end
+	end
+	table.sort(posts, function(a, b)
+		return a.Position.X < b.Position.X
+	end)
+	local sideOffsets = { -(BOARD_SIZE.X * 0.5 - POST_SIZE.X), BOARD_SIZE.X * 0.5 - POST_SIZE.X }
+	for index, post in posts do
+		local sideX = sideOffsets[index]
+		if sideX then
+			post.CFrame = sign.CFrame * CFrame.new(sideX, postOffsetY, 0.3)
+		end
+	end
+
+	local frameTrim = model:FindFirstChild("Frame")
+	if frameTrim and frameTrim:IsA("BasePart") then
+		frameTrim.CFrame = sign.CFrame * CFrame.new(0, 0, -0.14)
+	end
+end
+
+local function buildBoardModel(shops: Instance, floorPosition: Vector3, signCFrame: CFrame)
 	local existing = shops:FindFirstChild(BOARD_MODEL_NAME)
+	local hasManualAnchor = shops:FindFirstChild(ANCHOR_NAME) ~= nil
 	-- Reuse only if the saved board already has the current proportions;
 	-- otherwise fall through and rebuild (replaces the old oversized sign).
 	if existing and existing:IsA("Model") and existing:FindFirstChild(SIGN_NAME)
 		and (existing:FindFirstChild(SIGN_NAME) :: BasePart).Size == BOARD_SIZE then
 		local sign = existing:FindFirstChild(SIGN_NAME) :: BasePart
+
+		if hasManualAnchor then
+			applyBoardTransform(existing, floorPosition, signCFrame)
+		end
 
 		local oldBillboard = sign:FindFirstChild("SignBillboard")
 		if oldBillboard then
@@ -237,21 +282,17 @@ local function buildBoardModel(shops: Instance, boardAnchor: Vector3)
 		existing:Destroy()
 	end
 
-	local floorY = boardAnchor.Y
-	local boardX = boardAnchor.X
-	local boardZ = boardAnchor.Z
+	local floorY = floorPosition.Y
 
 	local model = Instance.new("Model")
 	model.Name = BOARD_MODEL_NAME
 
 	local sign = makeWoodPart(SIGN_NAME, BOARD_SIZE, Color3.fromRGB(118, 78, 38))
-	local signCenterY = floorY + SIGN_CENTER_HEIGHT
-	local signPosition = Vector3.new(boardX, signCenterY, boardZ)
-	local viewTarget = getBoardViewTarget(shops)
-	sign.CFrame = CropSellPriceBoard.getSignCFrame(signPosition, viewTarget)
+	sign.CFrame = signCFrame
 	sign.Parent = model
 
 	-- Two posts under the sign edges, aligned with the sign's rotation
+	local signCenterY = signCFrame.Position.Y
 	local postOffsetY = (floorY + POST_SIZE.Y * 0.5 - POST_BURY_DEPTH) - signCenterY
 	for _, sideX in { -(BOARD_SIZE.X * 0.5 - POST_SIZE.X), BOARD_SIZE.X * 0.5 - POST_SIZE.X } do
 		local post = makeWoodPart(POST_NAME, POST_SIZE, Color3.fromRGB(86, 58, 28))
@@ -297,8 +338,8 @@ local function setupWorldBoard()
 		return
 	end
 
-	local boardAnchor = getBoardAnchor(shops)
-	boardModel = buildBoardModel(shops, boardAnchor)
+	local floorPosition, signCFrame = getBoardPlacement(shops)
+	boardModel = buildBoardModel(shops, floorPosition, signCFrame)
 end
 
 function Service.init()

@@ -56,10 +56,18 @@ local requiredModule = require(script.CachedModules)
 requiredModule.Cache = cachedModules
 
 for moduleName, moduleScript in cachedModules do
-	
 	moduleScript.cachedModules = cachedModules
 	if typeof(moduleScript.init) == "function" then
 		moduleScript.init()
+	end
+end
+
+local environmentFeatures = { "WeatherService", "DayNightService", "CropSellLeaderboardService" }
+for _, featureName in environmentFeatures do
+	if cachedModules[featureName] then
+		print(`[Server] {featureName} initialized`)
+	else
+		warn(`[Server] MISSING {featureName} — environment feature will not run in this place`)
 	end
 end
 

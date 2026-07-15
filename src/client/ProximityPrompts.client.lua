@@ -27,6 +27,7 @@ local DialogueTemplate = ReplicatedStorage:WaitForChild("DialogueGUI")
 local SellDisplay = ReplicatedStorage:WaitForChild("SellGUI")
 local dialogueSound = ReplicatedStorage:WaitForChild("Sounds"):WaitForChild("Typing")
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
 
 --// Player
 local player = Players.LocalPlayer
@@ -201,9 +202,13 @@ local mainButtons = PlayerGui:WaitForChild("Main"):WaitForChild("Buttons")
 local blur = game.Lighting:WaitForChild("Blur")
 
 local function setHudButtonsVisible(visible: boolean)
-	for _, child in mainButtons:GetChildren() do
-		if child:IsA("GuiObject") then
-			child.Visible = visible
+	if visible then
+		NavigationHudState.applyMainButtons(mainButtons)
+	else
+		for _, child in mainButtons:GetChildren() do
+			if child:IsA("GuiObject") then
+				child.Visible = false
+			end
 		end
 	end
 end

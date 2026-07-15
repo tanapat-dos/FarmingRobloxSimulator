@@ -12,6 +12,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
@@ -59,6 +60,97 @@ end
 
 local weatherChanged = ensureRemote("WeatherChanged")
 
+local function findWeatherByName(name: string)
+	for _, weather in WEATHERS do
+		if weather.name == name then
+			return weather
+		end
+	end
+	return nil
+end
+
+local function setWeather(weather, duration: number)
+	currentWeather = weather
+	workspace:SetAttribute("Weather", weather.name)
+	workspace:SetAttribute("WeatherEndsAt", os.time() + duration)
+	weatherChanged:FireAllClients(weather.name, duration)
+end
+
+local function applyWeatherMutations()
+	local mutationService = cachedModules.Cache.MutationService
+	local mutations = currentWeather.mutations
+	if not mutations or not mutationService or not mutationService.giveMutation then
+		return
+	end
+
+	local serverFolder = workspace:FindFirstChild("World")
+		and workspace.World:FindFirstChild("Map")
+		and workspace.World.Map:FindFirstChild("PlantedSeeds")
+		and workspace.World.Map.PlantedSeeds:FindFirstChild("Server")
+	if not serverFolder then
+		return
+	end
+
+	for _, crop in serverFolder:GetChildren() do
+		if not crop:IsA("Model") then
+			continue
+		end
+
+		local serverConfig = crop:FindFirstChild("ServerConfiguration")
+		local fruitsFolder = serverConfig and serverConfig:FindFirstChild("Fruits")
+		if fruitsFolder then
+			for _, fruitFolder in fruitsFolder:GetChildren() do
+				local fruitIndex = tonumber(fruitFolder.Name)
+				if not fruitIndex then
+					continue
+				end
+
+				for _, mutation in mutations do
+					if random:NextNumber(0, 100) <= mutation.chancePct then
+						mutationService.giveMutation(crop, fruitIndex, mutation.name)
+					end
+				end
+			end
+		end
+	end
+end
+
+local function getStudioDebugWeatherName(): string?
+	if not RunService:IsStudio() then
+		return nil
+	end
+
+	local debug = workspace:GetAttribute("WeatherDebug")
+	if debug == "off" or debug == false then
+		return nil
+	end
+	if typeof(debug) == "string" then
+		return debug
+	end
+	-- Studio-only: quick storm preview in Play Test. Set WeatherDebug = "off" to
+	-- use the normal cycle, or "Rain" / "Sunny" for a specific state.
+	return "Thunderstorm"
+end
+
+local function waitWeatherPhase(duration: number)
+	local endsAt = os.time() + duration
+	while os.time() < endsAt do
+		task.wait(MUTATION_TICK_SECONDS)
+		if os.time() <= endsAt then
+			applyWeatherMutations()
+		end
+	end
+end
+
+function Service.forceWeather(weatherName: string, duration: number?): boolean
+	local weather = findWeatherByName(weatherName)
+	if not weather then
+		return false
+	end
+	setWeather(weather, duration or 120)
+	return true
+end
+
 local function pickNextWeather()
 	local candidates = {}
 	local totalWeight = 0
@@ -81,45 +173,8 @@ local function pickNextWeather()
 	return candidates[#candidates]
 end
 
-local function applyWeatherMutations()
-	local mutationService = cachedModules.Cache.MutationService
-	local mutations = currentWeather.mutations
-	if not mutations or not mutationService then
-		return
-	end
-
-	local serverFolder = workspace:FindFirstChild("World")
-		and workspace.World:FindFirstChild("Map")
-		and workspace.World.Map:FindFirstChild("PlantedSeeds")
-		and workspace.World.Map.PlantedSeeds:FindFirstChild("Server")
-	if not serverFolder then
-		return
-	end
-
-	for _, crop in serverFolder:GetChildren() do
-		local serverConfig = crop:FindFirstChild("ServerConfiguration")
-		local fruitsFolder = serverConfig and serverConfig:FindFirstChild("Fruits")
-		if fruitsFolder then
-			for _, fruitFolder in fruitsFolder:GetChildren() do
-				for _, mutation in mutations do
-					if random:NextNumber(0, 100) <= mutation.chancePct then
-						mutationService.giveMutation(crop, fruitFolder.Name, mutation.name)
-					end
-				end
-			end
-		end
-	end
-end
-
 function Service.getCurrentWeather(): string
 	return currentWeather.name
-end
-
-local function setWeather(weather, duration: number)
-	currentWeather = weather
-	workspace:SetAttribute("Weather", weather.name)
-	workspace:SetAttribute("WeatherEndsAt", os.time() + duration)
-	weatherChanged:FireAllClients(weather.name, duration)
 end
 
 function Service.init()
@@ -136,22 +191,39 @@ function Service.init()
 
 	-- Weather cycle
 	task.spawn(function()
-		-- Let plots/crops finish their first load before the first roll
-		task.wait(5)
+		local debugWeatherName = getStudioDebugWeatherName()
+		local initialWait = if debugWeatherName then 1 else 5
+		task.wait(initialWait)
+
+		if debugWeatherName then
+			local debugWeather = findWeatherByName(debugWeatherName)
+			if debugWeather then
+				local testDuration = if debugWeather.name == "Sunny"
+					then 60
+					else random:NextInteger(debugWeather.minDuration, debugWeather.maxDuration)
+				setWeather(debugWeather, testDuration)
+				waitWeatherPhase(testDuration)
+			else
+				warn(`[WeatherService] Unknown WeatherDebug value: {debugWeatherName}`)
+			end
+		end
+
 		while true do
 			local weather = pickNextWeather()
 			local duration = random:NextInteger(weather.minDuration, weather.maxDuration)
 			setWeather(weather, duration)
-
-			local endsAt = os.time() + duration
-			while os.time() < endsAt do
-				task.wait(MUTATION_TICK_SECONDS)
-				if os.time() <= endsAt then
-					applyWeatherMutations()
-				end
-			end
+			waitWeatherPhase(duration)
 		end
 	end)
+
+	if RunService:IsStudio() then
+		workspace:GetAttributeChangedSignal("WeatherDebug"):Connect(function()
+			local debugWeatherName = getStudioDebugWeatherName()
+			if debugWeatherName then
+				Service.forceWeather(debugWeatherName, 120)
+			end
+		end)
+	end
 end
 
 return Service

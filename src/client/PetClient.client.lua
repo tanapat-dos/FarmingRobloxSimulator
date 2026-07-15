@@ -7,6 +7,7 @@ local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local petsAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
+local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
 
 local clientSignals = ReplicatedStorage:FindFirstChild("ClientSignals")
 if not clientSignals then
@@ -21,20 +22,52 @@ if not togglePetShop then
 	togglePetShop.Parent = clientSignals
 end
 
-local PetShopScreenGui = PlayerGui:WaitForChild("PetShop")
-local PetShopUI = PetShopScreenGui:WaitForChild("Frame")
-local closePetShopBtn = PetShopUI:WaitForChild("CloseShop")
 local mainButtons = PlayerGui:WaitForChild("Main"):WaitForChild("Buttons")
 local blur = game.Lighting:WaitForChild("Blur")
 
+local PetShopScreenGui: ScreenGui? = nil
+local PetShopUI: Frame? = nil
+local closePetShopBtn: TextButton? = nil
 local activePetModel = nil
 local followConnection = nil
 local panelOpen = false
+local uiReady = false
+
+local function resolvePetShopUI(): boolean
+	if uiReady and PetShopUI and PetShopUI.Parent then
+		return true
+	end
+
+	local gui = PlayerGui:FindFirstChild("PetShop")
+	if not gui or not gui:IsA("ScreenGui") then
+		return false
+	end
+
+	local frame = gui:FindFirstChild("Frame")
+	if not frame or not frame:IsA("Frame") then
+		return false
+	end
+
+	local closeBtn = frame:FindFirstChild("CloseShop")
+	if not closeBtn or not closeBtn:IsA("TextButton") then
+		return false
+	end
+
+	PetShopScreenGui = gui
+	PetShopUI = frame
+	closePetShopBtn = closeBtn
+	uiReady = true
+	return true
+end
 
 local function setHudButtonsVisible(visible: boolean)
-	for _, child in mainButtons:GetChildren() do
-		if child:IsA("GuiObject") then
-			child.Visible = visible
+	if visible then
+		NavigationHudState.applyMainButtons(mainButtons)
+	else
+		for _, child in mainButtons:GetChildren() do
+			if child:IsA("GuiObject") then
+				child.Visible = false
+			end
 		end
 	end
 end
@@ -44,6 +77,10 @@ local function toggleBlur(enable)
 end
 
 local function showPetShopUI()
+	if not resolvePetShopUI() or not PetShopScreenGui or not PetShopUI then
+		warn("[PetClient] Cannot open pet shop — UI not ready.")
+		return
+	end
 	panelOpen = true
 	PetShopScreenGui.DisplayOrder = 10
 	pcall(setHudButtonsVisible, false)
@@ -56,18 +93,37 @@ local function showPetShopUI()
 end
 
 local function hidePetShopUI()
+	if not PetShopUI then
+		panelOpen = false
+		return
+	end
 	panelOpen = false
 	TweenService:Create(PetShopUI, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 		Size = UDim2.new(0, 0, 0, 0),
 	}):Play()
 	toggleBlur(false)
 	task.delay(0.2, function()
-		PetShopUI.Visible = false
+		if PetShopUI then
+			PetShopUI.Visible = false
+		end
 		pcall(setHudButtonsVisible, true)
 	end)
 end
 
-closePetShopBtn.MouseButton1Click:Connect(hidePetShopUI)
+task.spawn(function()
+	local gui = PlayerGui:WaitForChild("PetShop", 30)
+	if not gui then
+		warn("[PetClient] PetShop ScreenGui missing from StarterGui — pet shop UI will not open.")
+		return
+	end
+	if not resolvePetShopUI() then
+		warn("[PetClient] PetShop is missing Frame or CloseShop.")
+		return
+	end
+	if closePetShopBtn then
+		closePetShopBtn.MouseButton1Click:Connect(hidePetShopUI)
+	end
+end)
 
 togglePetShop.Event:Connect(function(action)
 	if action == "open" then

@@ -7,6 +7,7 @@ local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 
 local CropSellPriceBoard = require(ReplicatedStorage:WaitForChild("Modules").CropSellPriceBoard)
+local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -46,9 +47,13 @@ local function setHudButtonsVisible(visible: boolean)
 	if not mainButtons then
 		mainButtons = playerGui:WaitForChild("Main"):WaitForChild("Buttons")
 	end
-	for _, child in mainButtons:GetChildren() do
-		if child:IsA("GuiObject") then
-			child.Visible = visible
+	if visible then
+		NavigationHudState.applyMainButtons(mainButtons)
+	else
+		for _, child in mainButtons:GetChildren() do
+			if child:IsA("GuiObject") then
+				child.Visible = false
+			end
 		end
 	end
 end

@@ -67,6 +67,10 @@
           "$path": "src/server/Services/WeatherService.lua"
         },
 
+        "DayNightService": {
+          "$path": "src/server/Services/DayNightService.lua"
+        },
+
         "OrderService": {
           "$path": "src/server/Services/OrderService.lua"
         },
@@ -159,6 +163,14 @@
           "$path": "src/client/WeatherClient.client.lua"
         },
 
+        "NavigationHudToggle": {
+          "$path": "src/client/NavigationHudToggle.client.lua"
+        },
+
+        "DayNightClient": {
+          "$path": "src/client/DayNightClient.client.lua"
+        },
+
         "UITheme": {
           "$path": "src/client/UITheme.client.lua"
         },
@@ -242,6 +254,22 @@
 
         "CropSellPriceBoard": {
           "$path": "src/shared/Modules/CropSellPriceBoard.lua"
+        },
+
+        "DayNightConfig": {
+          "$path": "src/shared/Modules/DayNightConfig.lua"
+        },
+
+        "EnvironmentLighting": {
+          "$path": "src/shared/Modules/EnvironmentLighting.lua"
+        },
+
+        "NavigationHudState": {
+          "$path": "src/shared/Modules/NavigationHudState.lua"
+        },
+
+        "WeatherSounds": {
+          "$path": "src/shared/Modules/WeatherSounds.lua"
         },
 
         "ClientEffects": {
