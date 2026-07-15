@@ -360,13 +360,16 @@ function Service.init()
 		end)
 	end)
 
-	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName, price)
+	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName)
 		if player:GetAttribute("DataLoaded") ~= true then return end
-		if not moneyService.hasEnoughCash(player, price) then return end
 		local stock = Service:GetCurrentStock()
 		if not stock then return end
 		local crop = stock[cropName]
 		if not crop or crop.StockAmount <= 0 then return end
+		-- Server-authoritative price: never trust a client-sent value
+		local price = crop.Price
+		if typeof(price) ~= "number" or price <= 0 then return end
+		if not moneyService.hasEnoughCash(player, price) then return end
 		moneyService.removeCash(player, price)
 		crop.StockAmount -= 1
 		if IS_STUDIO then

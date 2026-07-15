@@ -13,18 +13,18 @@ local Service = {}
 local random = Random.new()
 
 function Service.getRandomGrowthMutation(seedData: Folder, number)
-	
-	-- Rainbow
-	if random:NextInteger(0,100) <= 50 then -- 50%
+
+	-- Odds must stay rare: GetFruitValue pays x50 (Rainbow) / x20 (Golden).
+	-- Rainbow: 1%
+	if random:NextInteger(1, 100) <= 1 then
 		return "Rainbow"
 	end
-	
-	-- Gold
-	if random:NextInteger(0,100) <= 50 then -- 50%
+
+	-- Golden: 5%
+	if random:NextInteger(1, 100) <= 5 then
 		return "Golden"
 	end
-	
-	
+
 	return ""
 end
 

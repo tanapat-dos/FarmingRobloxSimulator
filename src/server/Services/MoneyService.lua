@@ -128,28 +128,41 @@ function Service.giveMoney(target: Player, amount: number)
 	local DataService = cachedModules.Cache.DataService
 	local profileData = DataService.getData(target)
 
-	if profileData then
-		local boostedAmount = amount * Service.getCashMultiplier(target)
+	if profileData and typeof(amount) == "number" and amount > 0 then
+		-- Keep cash integral: leaderstats is an IntValue and fractional profile
+		-- cash accumulates float noise across sells.
+		local boostedAmount = math.floor(amount * Service.getCashMultiplier(target) + 0.5)
 		profileData.Cash += boostedAmount
 		Service.updateCashCount(target)
 		return boostedAmount
 	end
-	return amount
+	return 0
 end
 
-function Service.removeCash(target: Player, amount: number)
+function Service.removeCash(target: Player, amount: number): boolean
 	local DataService = cachedModules.Cache.DataService
 	local profileData = DataService.getData(target)
+
+	if typeof(amount) ~= "number" or amount <= 0 then
+		return false
+	end
+	amount = math.floor(amount)
 
 	if profileData and profileData.Cash >= amount then
 		profileData.Cash -= amount
 		Service.updateCashCount(target)
+		return true
 	end
+	return false
 end
 
 function Service.hasEnoughCash(target: Player, amount: number): boolean
 	local DataService = cachedModules.Cache.DataService
 	local profileData = DataService.getData(target)
+
+	if typeof(amount) ~= "number" then
+		return false
+	end
 
 	if profileData and profileData.Cash >= amount then
 		return true

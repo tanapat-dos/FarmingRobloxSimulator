@@ -26,8 +26,10 @@ Tool.Activated:Connect(function()
 	
 	if playerPlot then
 
-		local mouseCFrame = remotes.GetMouseCF:InvokeClient(Player)
-		if mouseCFrame then
+		local ok, mouseCFrame = pcall(function()
+			return remotes.GetMouseCF:InvokeClient(Player)
+		end)
+		if ok and typeof(mouseCFrame) == "CFrame" then
 			if not plotService.locationIsWithinPlot(playerPlot,mouseCFrame) then
 				return
 			end

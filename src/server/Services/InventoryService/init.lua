@@ -97,7 +97,7 @@ function Service.removeItem(player:Player, itemName: string, count:number)
 				local removeItem = false
 
 				if foundItem.Count then
-					foundItem.Count = math.clamp(foundItem.Count-1,0,math.huge)
+					foundItem.Count = math.clamp(foundItem.Count - count, 0, math.huge)
 					if foundItem.Count <= 0 then
 						removeItem = true
 					else
@@ -196,7 +196,7 @@ function Service.createNewTool(player: Player, toolName: string)
 		return
 	end
 
-	if not isSeed or isGear then
+	if not isSeed and not isGear then
 	-- ✅ Fruit (mutated)
 		local rarity, mutations, weight, fruitName = fruitNameParser(itemData)
 		if weight > 0 and fruitName then

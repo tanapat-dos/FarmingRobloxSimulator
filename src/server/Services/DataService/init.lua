@@ -29,6 +29,7 @@ end
 function Service.getData(target: Player)
 	if typeof(target) ~= "Instance" or not target:IsA("Player") then
 		warn("❌ getData was called with an invalid argument:", target)
+		return nil
 	end
 	if not target:GetAttribute("DataLoaded") then return nil end
 	local profile = Service.Profiles[target]
