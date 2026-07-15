@@ -139,8 +139,8 @@
           "$path": "src/client/PetRollAnimation.client.lua"
         },
 
-        "PetBackpackClient": {
-          "$path": "src/client/PetBackpackClient.client.lua"
+        "PetMenuClient": {
+          "$path": "src/client/PetMenuClient.client.lua"
         },
 
         "FruitToolDisplay": {

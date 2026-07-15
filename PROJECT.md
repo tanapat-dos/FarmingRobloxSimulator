@@ -40,7 +40,8 @@
 - `UITheme` — runtime theme pass (rounded corners, strokes, Gotham fonts, button hover/press feedback)
 - `OrderBoardClient` — procedural order-board panel (open via the board's ProximityPrompt)
 - `Toasts` — top-center notification popups for the `Notify` remote (plot purchases, capacity warnings)
-- `PetClient` — Pet shop UI, equip, pet follow
+- `PetClient` — Pet shop UI, pet follow
+- `PetMenuClient` — 🐾 HUD button + "My Pets" panel (pets are profile data, not backpack tools)
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`
 
