@@ -9,3 +9,9 @@
 Thumbs.db
 *.swp
 *~
+
+# Local MCP / Studio scratch scripts (underscore-prefixed helpers in tools/)
+tools/_*
+tools/node_modules/
+tools/package/
+tools/weppy-roblox-mcp-*.tgz
