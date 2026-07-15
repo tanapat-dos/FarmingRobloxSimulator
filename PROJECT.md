@@ -20,26 +20,36 @@
 |--------|--------|------|
 | Player data | `DataService` | Profile load/save, player template, `OwnedPets`, `EquippedPet` |
 | Economy | `MoneyService` | Cash, selling, friend boost, pet boost |
-| Plots | `PlotService` | Plot assignment, plant spawning on player farms |
+| Plots | `PlotService` | Plot assignment, plant spawning, bed progression (start 1 bed, buy up to 6 in-garden, 10 crops per bed) |
 | Seeds & shop | `SeedShopService` | Shop stock, restock, seed purchases |
 | Inventory | `InventoryService` | Tools, seeds, gear activators |
 | Harvesting | `HarvestService` | Server-side fruit harvest validation |
 | Mutations | `MutationService` | Golden / Rainbow mutation logic |
 | Pets | `PetService` | Gacha rolls, equip, pet cash boost |
+| Weather | `WeatherService` | Sunny/Rain/Thunderstorm cycle; applies Wet (x2) / Shocked (x8) environmental mutations to fruits |
+| Orders | `OrderService` | NPC order board: rotating deliver-N-crops orders at a premium; board spawns procedurally by the sell shop |
+| Rebirth | `RebirthService` | Prestige loop: escalating cost resets cash/seeds/crops/plots (pets kept) for +25% permanent sell boost per rebirth; procedural altar by the sell shop |
+| Gear | `GearService` | Supply kiosk by the seed shop: Fertilizer (instant grow/ripen) and Mutation Spray (guaranteed Golden, 25% Rainbow) — procedural consumable tools |
 | Monetization | `ProductService` | DevProduct purchases |
 
 **Client scripts (controllers):**
 
 - `ProximityPrompts` — NPC dialogue, shop/sell interactions
 - `TeleportManager` — HUD teleport buttons (garden, seeds, sell, pets)
-- `PetClient` — Pet shop UI, equip, pet follow
+- `WeatherClient` — rain particles, storm lightning, lighting mood, weather HUD banner
+- `UITheme` — runtime theme pass (rounded corners, strokes, Gotham fonts, button hover/press feedback)
+- `OrderBoardClient` — procedural order-board panel (open via the board's ProximityPrompt)
+- `Toasts` — top-center notification popups for the `Notify` remote (plot purchases, capacity warnings)
+- `PetClient` — Pet shop UI, pet follow
+- `PetMenuClient` — 🐾 HUD button + "My Pets" panel (pets are profile data, not backpack tools)
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`
 
 **Shared modules:**
 
 - `SeedRarity`, `FruitNameParse`, `GetFruitValue`, `Monetization`
-- `Mutations/Golden`, `Mutations/Rainbow`
+- `Mutations/Golden`, `Mutations/Rainbow` (growth, rolled at plant time: 5% / 1%)
+- `Mutations/Wet`, `Mutations/Shocked` (environmental, applied by weather)
 
 ---
 
@@ -52,7 +62,7 @@ src/
 └── shared/Modules/  → ReplicatedStorage.Modules
 ```
 
-Open `GrowGardenKit.rbxl` in Studio. Run `rojo serve` and connect the Rojo plugin for live sync.
+Open `Latest Farming Simulator.rbxl` in Studio. Run `rojo serve` and connect the Rojo plugin for live sync.
 
 Scripts **not** managed by Rojo (live in `.rbxl` only): ProfileStore, SeedData, ToolData, FormatNumber, Satchel.
 

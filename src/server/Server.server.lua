@@ -40,7 +40,7 @@ local function ensureRemoteEvent(name: string)
 	end
 end
 
-for _, remoteName in { "PetUse", "PetFollowUpdate", "UpdatePetBoost", "UpdateFriendBoost" } do
+for _, remoteName in { "PetUse", "PetFollowUpdate", "UpdatePetBoost", "UpdateFriendBoost", "Notify" } do
 	ensureRemoteEvent(remoteName)
 end
 
@@ -63,10 +63,7 @@ for moduleName, moduleScript in cachedModules do
 	end
 end
 
-ReplicatedStorage.RemoteEvents.Teleport.OnServerEvent:Connect(function(plr, position)
-	local char = plr.Character
-	if not char then return end
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-	hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
-end)
+-- NOTE: the old RemoteEvents.Teleport server handler was removed on purpose.
+-- TeleportManager.client.lua moves the character locally (the client owns its
+-- character CFrame), so a server handler that trusts a client-sent position
+-- was pure exploit surface (teleport-anywhere for free).

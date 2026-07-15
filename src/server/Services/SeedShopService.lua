@@ -12,6 +12,7 @@ local studioStock = nil -- in-memory stock for Studio mode
 
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
 local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
+local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
@@ -27,14 +28,20 @@ local Service = {
 }
 
 function Service.getRandomPlantSize(name: string, extraData: any)
-	return Random.new():NextNumber(1,3)
+	-- Was uniform 1-3: plots read as chaos with random giants everywhere.
+	-- Keep gentle variety; fruit size (below) carries the "giant crop" fantasy.
+	return Random.new():NextNumber(1, 1.75)
 end
 
 function Service.getRandomFruitSize(name: string, extraData: any)
 	if name == "Carrot Seed" then
 		return 1
 	end
-	return Random.new():NextNumber(1,3)
+	-- Bias low so giant fruits (~2.5x+) are rare and exciting instead of
+	-- constant. This also feeds sell value (weight^2), so the squared curve
+	-- keeps big harvests a jackpot rather than the average case.
+	local r = Random.new():NextNumber(0, 1)
+	return 1 + (r ^ 2.2) * 2
 end
 
 function Service.generateKey(prefix:string)
@@ -89,6 +96,24 @@ function Service.plantSeed(player: Player, seedName: string, location: CFrame, p
 					Debris:AddItem(debounce, 0.5)
 
 					local plotData = playerData.PlotData
+
+					-- Plot capacity: owned beds x cropsPerPlot
+					local plotService = cachedModules.Cache.PlotService
+					local plantCount = 0
+					for _ in plotData do
+						plantCount += 1
+					end
+					local capacity = plotService.getOwnedBedCount(player) * EconomyBalance.PLOTS.cropsPerPlot
+					if plantCount >= capacity then
+						local notifyRemote = RemoteEvents:FindFirstChild("Notify")
+						if notifyRemote then
+							notifyRemote:FireClient(player,
+								("Your plots are full (%d/%d)! Harvest crops or buy another plot."):format(plantCount, capacity),
+								"error")
+						end
+						return
+					end
+
 					-- Check if Seed too close too plant
 					local isTooClose = Service.isCloseToPlant(
 						plotService.getPlot(player).ReferencePoint,
@@ -360,13 +385,16 @@ function Service.init()
 		end)
 	end)
 
-	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName, price)
+	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName)
 		if player:GetAttribute("DataLoaded") ~= true then return end
-		if not moneyService.hasEnoughCash(player, price) then return end
 		local stock = Service:GetCurrentStock()
 		if not stock then return end
 		local crop = stock[cropName]
 		if not crop or crop.StockAmount <= 0 then return end
+		-- Server-authoritative price: never trust a client-sent value
+		local price = crop.Price
+		if typeof(price) ~= "number" or price <= 0 then return end
+		if not moneyService.hasEnoughCash(player, price) then return end
 		moneyService.removeCash(player, price)
 		crop.StockAmount -= 1
 		if IS_STUDIO then

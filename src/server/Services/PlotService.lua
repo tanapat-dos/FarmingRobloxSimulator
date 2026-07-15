@@ -13,22 +13,69 @@ local EconomyBalance = require(modules.EconomyBalance)
 
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
-function Service.locationIsWithinPlot(plot: Model, location: CFrame)
-	if plot and location then
-		local soil = plot:FindFirstChild("Soil")
-		if soil then
-			local params = RaycastParams.new()
-			params.FilterType = Enum.RaycastFilterType.Include
-			params.FilterDescendantsInstances = {soil}
-			for _, part: Part in soil:GetChildren() do
-				local result = workspace:Raycast(location.Position+Vector3.new(0,5,0), Vector3.new(0,-999999,0), params)
-				if result and result.Instance == part then
-					return true
-				end
-			end
+local PLOTS = EconomyBalance.PLOTS
+
+function Service.getOwnedBedCount(player: Player): number
+	local dataService = cachedModules.Cache.DataService
+	local data = dataService and dataService.getData(player)
+	local owned = data and data.PlotsOwned or PLOTS.startOwned
+	return math.clamp(owned, 1, PLOTS.maxOwned)
+end
+
+function Service.getSoilBeds(plot: Model): { BasePart }
+	local soil = plot:FindFirstChild("Soil")
+	if not soil then
+		return {}
+	end
+
+	local beds = {}
+	for _, part in soil:GetChildren() do
+		if part:IsA("BasePart") then
+			table.insert(beds, part)
 		end
 	end
-	return false
+
+	-- Deterministic order: closest to the garden entrance (TPPart) first,
+	-- so the free starter bed is always the one by the gate.
+	local ref = plot:FindFirstChild("TPPart")
+	local refPos = ref and ref.Position or plot:GetPivot().Position
+	table.sort(beds, function(a, b)
+		local da = (a.Position - refPos).Magnitude
+		local db = (b.Position - refPos).Magnitude
+		if math.abs(da - db) > 0.01 then
+			return da < db
+		end
+		if math.abs(a.Position.X - b.Position.X) > 0.01 then
+			return a.Position.X < b.Position.X
+		end
+		return a.Position.Z < b.Position.Z
+	end)
+	return beds
+end
+
+function Service.locationIsWithinPlot(plot: Model, location: CFrame)
+	if not (plot and location) then
+		return false
+	end
+
+	-- Only beds the plot owner has unlocked accept new plants
+	local unlocked = {}
+	local owner = Players:GetPlayerByUserId(plot:GetAttribute("USERID") or 0)
+	local ownedCount = owner and Service.getOwnedBedCount(owner) or 0
+	for index, bed in Service.getSoilBeds(plot) do
+		if index <= ownedCount then
+			table.insert(unlocked, bed)
+		end
+	end
+	if #unlocked == 0 then
+		return false
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = unlocked
+	local result = workspace:Raycast(location.Position + Vector3.new(0, 5, 0), Vector3.new(0, -999999, 0), params)
+	return result ~= nil
 end
 
 function Service.getMaxPlots()
@@ -108,6 +155,140 @@ local function rollHarvestRarityForCrop(cropName: string): string
 	end
 
 	return "Common"
+end
+
+local function darken(color: Color3, factor: number): Color3
+	return Color3.new(color.R * factor, color.G * factor, color.B * factor)
+end
+
+local function notify(player: Player, message: string, kind: string?)
+	local remote = replicatedStorage.RemoteEvents:FindFirstChild("Notify")
+	if remote then
+		remote:FireClient(player, message, kind or "info")
+	end
+end
+
+function Service.buyBed(buyer: Player, plot: Model, bedIndex: number)
+	local dataService = cachedModules.Cache.DataService
+	local moneyService = cachedModules.Cache.MoneyService
+
+	if plot:GetAttribute("USERID") ~= buyer.UserId then
+		notify(buyer, "You can only buy plots in your own garden!", "error")
+		return
+	end
+
+	local data = dataService.getData(buyer)
+	if not data then
+		return
+	end
+
+	local owned = Service.getOwnedBedCount(buyer)
+	if owned >= PLOTS.maxOwned then
+		return
+	end
+	if bedIndex ~= owned + 1 then
+		notify(buyer, "Buy plots in order — the next one is highlighted.", "error")
+		return
+	end
+
+	local price = PLOTS.prices[bedIndex]
+	if typeof(price) ~= "number" or price <= 0 then
+		return
+	end
+	if not moneyService.removeCash(buyer, price) then
+		notify(buyer, ("You need $%d for this plot."):format(price), "error")
+		return
+	end
+
+	data.PlotsOwned = owned + 1
+	Service.setupBeds(buyer, plot)
+	notify(buyer, ("Plot %d unlocked! You can now grow %d crops."):format(
+		data.PlotsOwned, data.PlotsOwned * PLOTS.cropsPerPlot), "success")
+end
+
+function Service.setupBeds(player: Player, plot: Model)
+	local owned = Service.getOwnedBedCount(player)
+
+	for index, bed in Service.getSoilBeds(plot) do
+		bed:SetAttribute("BedIndex", index)
+
+		local originalColor = bed:GetAttribute("OriginalColor")
+		if not originalColor then
+			originalColor = bed.Color
+			bed:SetAttribute("OriginalColor", originalColor)
+		end
+
+		local oldLock = bed:FindFirstChild("PlotLock")
+		if oldLock then
+			oldLock:Destroy()
+		end
+
+		if index <= owned then
+			bed.Color = originalColor
+		elseif index <= PLOTS.maxOwned then
+			bed.Color = darken(originalColor, 0.55)
+
+			local lock = Instance.new("Folder")
+			lock.Name = "PlotLock"
+
+			local billboard = Instance.new("BillboardGui")
+			billboard.Name = "LockSign"
+			billboard.Size = UDim2.fromOffset(150, 40)
+			billboard.StudsOffset = Vector3.new(0, 4, 0)
+			billboard.AlwaysOnTop = true
+			billboard.MaxDistance = 70
+			billboard.Parent = lock
+
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.fromScale(1, 1)
+			label.BackgroundColor3 = Color3.fromRGB(25, 28, 36)
+			label.BackgroundTransparency = 0.3
+			label.TextColor3 = Color3.fromRGB(255, 216, 120)
+			label.Font = Enum.Font.GothamBold
+			label.TextScaled = true
+			label.Text = ("🔒 Plot %d — $%d"):format(index, PLOTS.prices[index] or 0)
+			label.Parent = billboard
+
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = label
+
+			-- Only the NEXT bed gets a working prompt; later ones just show price
+			if index == owned + 1 then
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.Name = "BuyPrompt"
+				prompt.ActionText = ("Buy Plot — $%d"):format(PLOTS.prices[index] or 0)
+				prompt.ObjectText = "Locked Plot"
+				prompt.HoldDuration = 0.4
+				prompt.MaxActivationDistance = 14
+				prompt.RequiresLineOfSight = false
+				prompt.Parent = lock
+
+				prompt.Triggered:Connect(function(buyer)
+					Service.buyBed(buyer, plot, index)
+				end)
+			end
+
+			lock.Parent = bed
+		else
+			-- Reserved beds beyond maxOwned: dark, no purchase path (yet)
+			bed.Color = darken(originalColor, 0.4)
+		end
+	end
+end
+
+function Service.clearBeds(plot: Model)
+	for _, bed in Service.getSoilBeds(plot) do
+		local lock = bed:FindFirstChild("PlotLock")
+		if lock then
+			lock:Destroy()
+		end
+		local originalColor = bed:GetAttribute("OriginalColor")
+		if originalColor then
+			bed.Color = originalColor
+		end
+		bed:SetAttribute("BedIndex", nil)
+	end
 end
 
 function Service.createServerModel(player: Player, key: string, data: any)
@@ -342,6 +523,9 @@ function Service.dataLoaded(player: Player)
 		ImgLbl.Image = (isReady and content) or ""
 	end
 
+	-- 🌱 Plot progression: lock beds the player hasn't bought yet
+	Service.setupBeds(player, plot)
+
 	-- 🌱 Load player plants
 	local plotData = cachedModules.Cache.DataService.getData(player).PlotData
 	task.spawn(function()
@@ -357,6 +541,7 @@ function Service.playerRemoved(player:Player)
 	local foundPlot = Service.getPlot(player)
 
 	if foundPlot then
+		Service.clearBeds(foundPlot)
 		foundPlot:SetAttribute("Taken", nil)
 		foundPlot:SetAttribute("USERID", nil)
 		foundPlot:WaitForChild("PlayerSign").Main.SurfaceGui.TextLabel.Text = "Empty Garden"

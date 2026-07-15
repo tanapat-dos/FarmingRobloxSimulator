@@ -9,7 +9,6 @@ local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local petsAssets = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Pets")
 local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
-local activatorTemplate = script.Parent.InventoryService.PetToolActivator
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
 local IS_STUDIO = RunService:IsStudio()
@@ -41,6 +40,7 @@ local petFollowUpdate = ensureRemote("PetFollowUpdate")
 local petUse = ensureRemote("PetUse")
 local updatePetBoost = ensureRemote("UpdatePetBoost")
 local resetPetShop = ensureRemote("ResetPetShop")
+local petMenu = ensureRemote("PetMenu")
 
 local function generateEggStock()
 	local candidates = {}
@@ -177,27 +177,6 @@ local function findOwnedPet(data, petId: string)
 	return nil
 end
 
-local function findPetBoostFromTool(player: Player, petId: string): number?
-	for _, container in ipairs({ player.Backpack, player.Character }) do
-		if container then
-			for _, child in container:GetChildren() do
-				if child:IsA("Tool") and child:GetAttribute("petId") == petId then
-					local boost = child:GetAttribute("petBoost")
-					if typeof(boost) == "number" and boost > 1 then
-						return boost
-					end
-					local eggName = child:GetAttribute("eggName")
-					local petName = child:GetAttribute("petName")
-					if typeof(eggName) == "string" and typeof(petName) == "string" then
-						return EconomyBalance.getPetBoostMultiplier(eggName, petName)
-					end
-				end
-			end
-		end
-	end
-	return nil
-end
-
 local function applyPetBonuses(player: Player, pet)
 	local boost = resolvePetBoost(pet)
 	local growthReduction = resolvePetGrowthReduction(pet)
@@ -213,66 +192,10 @@ local function clearPetBonuses(player: Player)
 	updatePetBoost:FireClient(player, 0, 0)
 end
 
-local function playerHasPetTool(player: Player, petId: string): boolean
-	for _, container in ipairs({ player.Backpack, player.Character }) do
-		if container then
-			for _, child in container:GetChildren() do
-				if child:IsA("Tool") and child:GetAttribute("petId") == petId then
-					return true
-				end
-			end
-		end
-	end
-	return false
-end
-
-function Service.createPetTool(player: Player, pet)
-	if not pet or not pet.id then
-		return
-	end
-	if playerHasPetTool(player, pet.id) then
-		return
-	end
-
-	local tool = Instance.new("Tool")
-	tool.Name = pet.name
-	local boost = resolvePetBoost(pet)
-	local boostPct = math.floor((boost - 1) * 100)
-	local growthReduction = resolvePetGrowthReduction(pet)
-	local tooltip = string.format("%s pet • +%d%% cash", pet.rarity or "Pet", boostPct)
-	if growthReduction > 0 then
-		tooltip ..= string.format(", -%d%% grow time", growthReduction)
-	end
-	tooltip ..= " (click to equip)"
-	tool.ToolTip = tooltip
-	tool.RequiresHandle = true
-	tool.CanBeDropped = false
-	tool.ManualActivationOnly = true
-	tool:SetAttribute("isPet", true)
-	tool:SetAttribute("petId", pet.id)
-	tool:SetAttribute("petName", pet.name)
-	tool:SetAttribute("eggName", pet.egg)
-	tool:SetAttribute("petBoost", boost)
-	tool:SetAttribute("petGrowthReduction", growthReduction)
-
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(1, 1, 1)
-	handle.Transparency = 1
-	handle.CanCollide = false
-	handle.Massless = true
-	handle.Anchored = false
-	handle.CastShadow = false
-	handle.Parent = tool
-
-	local activator = activatorTemplate:Clone()
-	activator.Parent = tool
-	require(activator)
-
-	tool.Parent = player.Backpack
-end
-
-function Service.syncPetTools(player: Player)
+-- Pets are NOT backpack tools: they live in the profile only and are
+-- managed through the PetMenu remote (see PetMenuClient). This keeps the
+-- hotbar/inventory free no matter how many pets a player owns.
+function Service.pushPetList(player: Player)
 	local dataService = cachedModules.Cache.DataService
 	local data = dataService.getData(player)
 	if not data then
@@ -280,8 +203,42 @@ function Service.syncPetTools(player: Player)
 	end
 
 	ensurePetIds(data)
+	local equippedId = data.EquippedPet and data.EquippedPet.id
+
+	local payload = {}
 	for _, pet in ipairs(data.OwnedPets) do
-		Service.createPetTool(player, pet)
+		local boost = resolvePetBoost(pet)
+		table.insert(payload, {
+			id = pet.id,
+			name = pet.name,
+			egg = pet.egg,
+			rarity = pet.rarity,
+			boostPct = math.floor((boost - 1) * 100 + 0.5),
+			growthReduction = resolvePetGrowthReduction(pet),
+			equipped = pet.id == equippedId,
+		})
+	end
+
+	table.sort(payload, function(a, b)
+		if a.equipped ~= b.equipped then
+			return a.equipped
+		end
+		return a.boostPct > b.boostPct
+	end)
+
+	petMenu:FireClient(player, "state", payload)
+end
+
+-- Legacy cleanup: earlier builds shipped pets as backpack tools
+local function destroyLegacyPetTools(player: Player)
+	for _, container in ipairs({ player.Backpack, player.Character }) do
+		if container then
+			for _, child in container:GetChildren() do
+				if child:IsA("Tool") and child:GetAttribute("isPet") == true then
+					child:Destroy()
+				end
+			end
+		end
 	end
 end
 
@@ -294,11 +251,7 @@ function Service.equipPet(player: Player, petId: string)
 
 	local pet = findOwnedPet(data, petId)
 	if not pet then
-		local toolBoost = findPetBoostFromTool(player, petId)
-		if not toolBoost then
-			return
-		end
-		pet = { id = petId, boost = toolBoost }
+		return
 	end
 
 	local boost = resolvePetBoost(pet)
@@ -318,6 +271,7 @@ function Service.equipPet(player: Player, petId: string)
 		egg = pet.egg,
 		name = pet.name,
 	})
+	Service.pushPetList(player)
 end
 
 function Service.unequipPet(player: Player, petId: string?)
@@ -333,6 +287,7 @@ function Service.unequipPet(player: Player, petId: string?)
 	data.EquippedPet = nil
 	clearPetBonuses(player)
 	petFollowUpdate:FireClient(player, { equipped = false })
+	Service.pushPetList(player)
 end
 
 local function sendEquippedFollowVisual(player: Player)
@@ -393,7 +348,8 @@ function Service.init()
 	end)
 
 	local function onPlayerReady(player: Player)
-		Service.syncPetTools(player)
+		destroyLegacyPetTools(player)
+		Service.pushPetList(player)
 		sendEquippedFollowVisual(player)
 	end
 
@@ -411,7 +367,7 @@ function Service.init()
 
 		player.CharacterAdded:Connect(function()
 			task.wait(0.3)
-			Service.syncPetTools(player)
+			destroyLegacyPetTools(player)
 			sendEquippedFollowVisual(player)
 		end)
 	end)
@@ -427,6 +383,12 @@ function Service.init()
 			Service.equipPet(player, petId)
 		elseif action == "unequip" then
 			Service.unequipPet(player, petId)
+		end
+	end)
+
+	petMenu.OnServerEvent:Connect(function(player, action)
+		if action == "refresh" and player:GetAttribute("DataLoaded") == true then
+			Service.pushPetList(player)
 		end
 	end)
 
@@ -480,7 +442,6 @@ function Service.init()
 			table.insert(data.OwnedPets, petRecord)
 		end
 
-		Service.createPetTool(player, petRecord)
 		Service.equipPet(player, petRecord.id)
 
 		remotes.PetRollResult:FireClient(player, {

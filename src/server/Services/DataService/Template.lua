@@ -6,6 +6,9 @@ local template = {
 	PlotData = {},
 	OwnedPets = {},
 	EquippedPet = nil,
+	OrderStats = { Completed = 0 },
+	PlotsOwned = EconomyBalance.PLOTS.startOwned,
+	Rebirths = 0,
 }
 
 return template

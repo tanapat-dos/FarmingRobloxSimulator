@@ -1,5 +1,5 @@
 {
-  "name": "GrowGardenKit",
+  "name": "FarmingRobloxSimulator",
   "tree": {
     "$className": "DataModel",
 
@@ -61,6 +61,22 @@
 
         "PetService": {
           "$path": "src/server/Services/PetService.lua"
+        },
+
+        "WeatherService": {
+          "$path": "src/server/Services/WeatherService.lua"
+        },
+
+        "OrderService": {
+          "$path": "src/server/Services/OrderService.lua"
+        },
+
+        "RebirthService": {
+          "$path": "src/server/Services/RebirthService.lua"
+        },
+
+        "GearService": {
+          "$path": "src/server/Services/GearService.lua"
         },
 
         "CropSellLeaderboardService": {
@@ -127,8 +143,8 @@
           "$path": "src/client/PetRollAnimation.client.lua"
         },
 
-        "PetBackpackClient": {
-          "$path": "src/client/PetBackpackClient.client.lua"
+        "PetMenuClient": {
+          "$path": "src/client/PetMenuClient.client.lua"
         },
 
         "CropPriceLeaderboard": {
@@ -137,6 +153,22 @@
 
         "FruitToolDisplay": {
           "$path": "src/client/FruitToolDisplay.client.lua"
+        },
+
+        "WeatherClient": {
+          "$path": "src/client/WeatherClient.client.lua"
+        },
+
+        "UITheme": {
+          "$path": "src/client/UITheme.client.lua"
+        },
+
+        "OrderBoardClient": {
+          "$path": "src/client/OrderBoardClient.client.lua"
+        },
+
+        "Toasts": {
+          "$path": "src/client/Toasts.client.lua"
         }
       }
     },
@@ -232,6 +264,16 @@
 
           "Rainbow": {
             "$path": "src/shared/Modules/Mutations/Rainbow.lua",
+            "$ignoreUnknownInstances": true
+          },
+
+          "Wet": {
+            "$path": "src/shared/Modules/Mutations/Wet.lua",
+            "$ignoreUnknownInstances": true
+          },
+
+          "Shocked": {
+            "$path": "src/shared/Modules/Mutations/Shocked.lua",
             "$ignoreUnknownInstances": true
           }
         }

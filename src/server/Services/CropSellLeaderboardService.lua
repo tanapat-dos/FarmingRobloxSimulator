@@ -11,9 +11,11 @@ local SIGN_NAME = "Sign"
 local POST_NAME = "Post"
 local ANCHOR_NAME = "LeaderboardAnchor"
 
-local BOARD_SIZE = Vector3.new(96, 48, 0.65)
-local POST_SIZE = Vector3.new(8, 24, 8)
-local POST_BURY_DEPTH = 2
+-- Human-scale notice board: readable list without towering over the plaza.
+local BOARD_SIZE = Vector3.new(22, 12, 0.65)
+local SIGN_CENTER_HEIGHT = 11 -- sign center above the floor (bottom edge at ~5)
+local POST_SIZE = Vector3.new(1.2, 7.5, 1.2)
+local POST_BURY_DEPTH = 1
 local BEHIND_NPC_OFFSET = 18
 local PLATFORM_BACK_MARGIN = 2
 
@@ -197,7 +199,10 @@ end
 
 local function buildBoardModel(shops: Instance, boardAnchor: Vector3)
 	local existing = shops:FindFirstChild(BOARD_MODEL_NAME)
-	if existing and existing:IsA("Model") and existing:FindFirstChild(SIGN_NAME) then
+	-- Reuse only if the saved board already has the current proportions;
+	-- otherwise fall through and rebuild (replaces the old oversized sign).
+	if existing and existing:IsA("Model") and existing:FindFirstChild(SIGN_NAME)
+		and (existing:FindFirstChild(SIGN_NAME) :: BasePart).Size == BOARD_SIZE then
 		local sign = existing:FindFirstChild(SIGN_NAME) :: BasePart
 
 		local oldBillboard = sign:FindFirstChild("SignBillboard")
@@ -239,18 +244,20 @@ local function buildBoardModel(shops: Instance, boardAnchor: Vector3)
 	local model = Instance.new("Model")
 	model.Name = BOARD_MODEL_NAME
 
-	local post = makeWoodPart(POST_NAME, POST_SIZE, Color3.fromRGB(86, 58, 28))
-	local postCenterY = floorY + (POST_SIZE.Y * 0.5) - POST_BURY_DEPTH
-	post.CFrame = CFrame.new(boardX, postCenterY, boardZ)
-	post.Parent = model
-
 	local sign = makeWoodPart(SIGN_NAME, BOARD_SIZE, Color3.fromRGB(118, 78, 38))
-	local postTopY = floorY + POST_SIZE.Y - POST_BURY_DEPTH
-	local signCenterY = postTopY + BOARD_SIZE.Y * 0.5
+	local signCenterY = floorY + SIGN_CENTER_HEIGHT
 	local signPosition = Vector3.new(boardX, signCenterY, boardZ)
 	local viewTarget = getBoardViewTarget(shops)
 	sign.CFrame = CropSellPriceBoard.getSignCFrame(signPosition, viewTarget)
 	sign.Parent = model
+
+	-- Two posts under the sign edges, aligned with the sign's rotation
+	local postOffsetY = (floorY + POST_SIZE.Y * 0.5 - POST_BURY_DEPTH) - signCenterY
+	for _, sideX in { -(BOARD_SIZE.X * 0.5 - POST_SIZE.X), BOARD_SIZE.X * 0.5 - POST_SIZE.X } do
+		local post = makeWoodPart(POST_NAME, POST_SIZE, Color3.fromRGB(86, 58, 28))
+		post.CFrame = sign.CFrame * CFrame.new(sideX, postOffsetY, 0.3)
+		post.Parent = model
+	end
 
 	local frameTrim = makeWoodPart(
 		"Frame",
