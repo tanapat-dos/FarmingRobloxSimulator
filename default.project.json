@@ -77,6 +77,10 @@
 
         "GearService": {
           "$path": "src/server/Services/GearService.lua"
+        },
+
+        "CropSellLeaderboardService": {
+          "$path": "src/server/Services/CropSellLeaderboardService.lua"
         }
       }
     },
@@ -141,6 +145,10 @@
 
         "PetMenuClient": {
           "$path": "src/client/PetMenuClient.client.lua"
+        },
+
+        "CropPriceLeaderboard": {
+          "$path": "src/client/CropPriceLeaderboard.client.lua"
         },
 
         "FruitToolDisplay": {
@@ -230,6 +238,10 @@
 
         "EconomyBalance": {
           "$path": "src/shared/Modules/EconomyBalance.lua"
+        },
+
+        "CropSellPriceBoard": {
+          "$path": "src/shared/Modules/CropSellPriceBoard.lua"
         },
 
         "ClientEffects": {

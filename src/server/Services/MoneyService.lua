@@ -232,6 +232,11 @@ function Service.SellLisenter(player: Player, action: string)
 
 						boostedValue = round(boostedValue, 2)
 
+						local leaderboard = cachedModules.Cache.CropSellLeaderboardService
+						if leaderboard and leaderboard.recordSale then
+							leaderboard.recordSale(player, fruitNameOnly, weight, rarity, boostedValue)
+						end
+
 						result.success = true
 						result.msg = `Sold <font color="rgb(0,255,0)">{displayString}</font> for <font color="rgb(0,255,0)">${boostedValue}</font>`
 					else
@@ -309,6 +314,11 @@ function Service.SellLisenter(player: Player, action: string)
 							totalValue += boostedValue
 							soldCount += 1
 							inventoryService.removeItem(player, fruitKey, 1)
+
+							local leaderboard = cachedModules.Cache.CropSellLeaderboardService
+							if leaderboard and leaderboard.recordSale then
+								leaderboard.recordSale(player, fruitNameOnly, weight, rarity, boostedValue)
+							end
 						end
 					end
 				end

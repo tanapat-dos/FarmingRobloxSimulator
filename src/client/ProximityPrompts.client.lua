@@ -14,6 +14,14 @@ local function firePetShopOpen()
 	end
 end
 
+local function fireCropPriceBoardOpen()
+	local cs = ReplicatedStorage:FindFirstChild("ClientSignals")
+	if cs then
+		local toggle = cs:FindFirstChild("ToggleCropPriceBoard")
+		if toggle then toggle:Fire("open") end
+	end
+end
+
 --// Assets
 local DialogueTemplate = ReplicatedStorage:WaitForChild("DialogueGUI")
 local SellDisplay = ReplicatedStorage:WaitForChild("SellGUI")
@@ -321,6 +329,13 @@ local function createSellGUI()
 			Dialogue:Player("Nevermind")
 			respondAfter(1.5, "Goodbye!", true)
 		end,
+
+		PriceGuide = function()
+			hideSellGUI()
+			Dialogue:Player("Show me crop sell prices")
+			respondAfter(0.5, "Here's what each crop sells for.", true)
+			fireCropPriceBoardOpen()
+		end,
 	}
 
 	for name, callback in pairs(buttons) do
@@ -328,6 +343,22 @@ local function createSellGUI()
 		if btn then
 			addHoverEffect(btn)
 			btn.MouseButton1Click:Connect(callback)
+		end
+	end
+
+	if not frame:FindFirstChild("PriceGuide") then
+		local cancelBtn = frame:FindFirstChild("Cancel")
+		local templateBtn = frame:FindFirstChild("HowMuch") or cancelBtn
+		if templateBtn and templateBtn:IsA("GuiObject") then
+			local priceGuideBtn = templateBtn:Clone()
+			priceGuideBtn.Name = "PriceGuide"
+			if priceGuideBtn:IsA("TextButton") then
+				priceGuideBtn.Text = "Price Guide"
+			end
+			priceGuideBtn.LayoutOrder = (templateBtn :: GuiObject).LayoutOrder + 1
+			priceGuideBtn.Parent = frame
+			addHoverEffect(priceGuideBtn)
+			priceGuideBtn.MouseButton1Click:Connect(buttons.PriceGuide)
 		end
 	end
 end
@@ -377,6 +408,11 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 			task.delay(0.5, function()
 				toggleAllPrompts(true)
 			end)
+		end)
+	elseif prompt.Name == "CropPriceBoard" then
+		fireCropPriceBoardOpen()
+		task.delay(0.5, function()
+			toggleAllPrompts(true)
 		end)
 	end
 	
