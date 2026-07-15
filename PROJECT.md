@@ -26,12 +26,14 @@
 | Harvesting | `HarvestService` | Server-side fruit harvest validation |
 | Mutations | `MutationService` | Golden / Rainbow mutation logic |
 | Pets | `PetService` | Gacha rolls, equip, pet cash boost |
+| Weather | `WeatherService` | Sunny/Rain/Thunderstorm cycle; applies Wet (x2) / Shocked (x8) environmental mutations to fruits |
 | Monetization | `ProductService` | DevProduct purchases |
 
 **Client scripts (controllers):**
 
 - `ProximityPrompts` — NPC dialogue, shop/sell interactions
 - `TeleportManager` — HUD teleport buttons (garden, seeds, sell, pets)
+- `WeatherClient` — rain particles, storm lightning, lighting mood, weather HUD banner
 - `PetClient` — Pet shop UI, equip, pet follow
 - `CropReplicator` — Plant growth visuals, harvest prompts
 - `UIEffects`, `FriendBoost`, `OwnerIcon`, `ClientEffects`
@@ -39,7 +41,8 @@
 **Shared modules:**
 
 - `SeedRarity`, `FruitNameParse`, `GetFruitValue`, `Monetization`
-- `Mutations/Golden`, `Mutations/Rainbow`
+- `Mutations/Golden`, `Mutations/Rainbow` (growth, rolled at plant time: 5% / 1%)
+- `Mutations/Wet`, `Mutations/Shocked` (environmental, applied by weather)
 
 ---
 
@@ -52,7 +55,7 @@ src/
 └── shared/Modules/  → ReplicatedStorage.Modules
 ```
 
-Open `GrowGardenKit.rbxl` in Studio. Run `rojo serve` and connect the Rojo plugin for live sync.
+Open `Latest Farming Simulator.rbxl` in Studio. Run `rojo serve` and connect the Rojo plugin for live sync.
 
 Scripts **not** managed by Rojo (live in `.rbxl` only): ProfileStore, SeedData, ToolData, FormatNumber, Satchel.
 

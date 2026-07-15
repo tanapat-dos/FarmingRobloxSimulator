@@ -1,5 +1,5 @@
 {
-  "name": "GrowGardenKit",
+  "name": "FarmingRobloxSimulator",
   "tree": {
     "$className": "DataModel",
 
@@ -61,6 +61,10 @@
 
         "PetService": {
           "$path": "src/server/Services/PetService.lua"
+        },
+
+        "WeatherService": {
+          "$path": "src/server/Services/WeatherService.lua"
         }
       }
     },
@@ -129,6 +133,10 @@
 
         "FruitToolDisplay": {
           "$path": "src/client/FruitToolDisplay.client.lua"
+        },
+
+        "WeatherClient": {
+          "$path": "src/client/WeatherClient.client.lua"
         }
       }
     },
@@ -220,6 +228,16 @@
 
           "Rainbow": {
             "$path": "src/shared/Modules/Mutations/Rainbow.lua",
+            "$ignoreUnknownInstances": true
+          },
+
+          "Wet": {
+            "$path": "src/shared/Modules/Mutations/Wet.lua",
+            "$ignoreUnknownInstances": true
+          },
+
+          "Shocked": {
+            "$path": "src/shared/Modules/Mutations/Shocked.lua",
             "$ignoreUnknownInstances": true
           }
         }

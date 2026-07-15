@@ -1,13 +1,13 @@
-# Grow Garden Kit - Rojo Project
+# Farming Roblox Simulator - Rojo Project
 
 This project uses **Rojo** for live-sync between your `.lua` files and Roblox Studio.
 
 ## Project Structure
 
 ```
-garden-roblox-sample/
+FarmingRobloxSimulator/
 ├── default.project.json      ← Rojo config
-├── GrowGardenKit.rbxl        ← Roblox place file (open this in Studio)
+├── Latest Farming Simulator.rbxl  ← Roblox place file (open this in Studio)
 └── src/
     ├── server/
     │   ├── Server.server.lua           ← Bootstrap all services
@@ -78,7 +78,7 @@ rojo serve
 You should see: `Rojo server listening on port 34872`
 
 ### 3. Connect Studio
-1. Open `GrowGardenKit.rbxl` in Roblox Studio
+1. Open `Latest Farming Simulator.rbxl` in Roblox Studio
 2. Make sure the **Rojo** plugin is installed in Studio
 3. Click **Connect** in the Rojo plugin panel
 4. Rojo will sync your `.lua` files → Studio instantly

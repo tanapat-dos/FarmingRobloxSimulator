@@ -10,8 +10,11 @@ local growthMutations = {
 	["Rainbow"] = 50,
 }
 
+-- Applied by WeatherService while Rain / Thunderstorm is active.
 local environmentalMutations = {
 	["None"] = 1,
+	["Wet"] = 2,
+	["Shocked"] = 8,
 }
 
 return function(fruitData: any)
@@ -34,8 +37,19 @@ return function(fruitData: any)
 		end
 
 		local rarityMultiplier = HarvestRarityConfig.getMultiplier(rarity)
+
+		-- Environmental mutations stack multiplicatively (Wet + Shocked is
+		-- possible during a thunderstorm, and both are rare).
 		local environmentalMultipler: number = 1
-		return baseValue * weight ^ 2 * growthMutationMultiplier * rarityMultiplier * (1 + environmentalMultipler)
+		if #mutations > 0 then
+			for mut: string, multiplier: number in environmentalMutations do
+				if mut ~= "None" and table.find(mutations, mut) then
+					environmentalMultipler *= multiplier
+				end
+			end
+		end
+
+		return baseValue * weight ^ 2 * growthMutationMultiplier * rarityMultiplier * environmentalMultipler
 	end
 	return 10
 end

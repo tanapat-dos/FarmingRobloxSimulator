@@ -102,12 +102,11 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 						clone:SetPrimaryPartCFrame(serverModel.FruitPrompts[fruitNumber].CFrame)
 						clone:ScaleTo(sizeScaling)
 						clone.Parent = clientModel
-						
-						serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Changed:Connect(function()
-							mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.FruitPrompts[fruitNumber])
-						end)
+
+						-- Mutations.Changed is wired once per fruit in childAdded;
+						-- reconnecting here leaked a connection every regrow cycle.
 						mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.FruitPrompts[fruitNumber])
-						
+
 						syncHarvestRarity(serverModel, clientModel, fruitNumber, true)
 
 						local objectValue = Instance.new("ObjectValue")
@@ -125,10 +124,7 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 					objectValue.Value = clientModel
 					objectValue.Parent = harvestPrompt
 					harvestPrompt.Enabled = true
-					
-					serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Changed:Connect(function()
-						mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.PrimaryPart)
-					end)
+
 					mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.PrimaryPart)
 					syncHarvestRarity(serverModel, clientModel, fruitNumber, false)
 				end
@@ -159,6 +155,43 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 				end
 			end)
 		end
+	end)
+end
+
+local function growthCelebration(clientModel: Model)
+	-- Small one-shot sparkle burst when a plant finishes growing.
+	local host = clientModel.PrimaryPart or clientModel:FindFirstChildWhichIsA("BasePart", true)
+	if not host then
+		return
+	end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "GrownCelebration"
+
+	local burst = Instance.new("ParticleEmitter")
+	burst.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 255, 140)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 250, 180)),
+	})
+	burst.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35),
+		NumberSequenceKeypoint.new(1, 0.05),
+	})
+	burst.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	burst.Lifetime = NumberRange.new(0.5, 0.9)
+	burst.Speed = NumberRange.new(3, 6)
+	burst.SpreadAngle = Vector2.new(180, 180)
+	burst.Rate = 0
+	burst.LightEmission = 0.6
+	burst.Parent = attachment
+
+	attachment.Parent = host
+	burst:Emit(14)
+	task.delay(1.5, function()
+		attachment:Destroy()
 	end)
 end
 
@@ -198,7 +231,10 @@ local function growthPercentageUpdated(clientModel: Model, newValue: number)
 		end
 
 		if newValue >= 100 then
-			clientModel:SetAttribute("FullyGrown", true)
+			if clientModel:GetAttribute("FullyGrown") ~= true then
+				clientModel:SetAttribute("FullyGrown", true)
+				growthCelebration(clientModel)
+			end
 		end
 
 	end)
@@ -243,10 +279,11 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "GrowthTimer"
-	billboard.Size = UDim2.fromOffset(110, 36)
-	billboard.StudsOffset = Vector3.new(0, 3, 0)
+	-- Keep the timer subtle: small tag, only readable when standing nearby.
+	billboard.Size = UDim2.fromOffset(72, 20)
+	billboard.StudsOffset = Vector3.new(0, 2.2, 0)
 	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 100
+	billboard.MaxDistance = 35
 	billboard.Adornee = adornee
 	billboard.Parent = clientModel
 
@@ -382,6 +419,20 @@ local function childAdded(child: Instance)
 								rarityValue.Changed:Connect(function()
 									if canHarvest.Value then
 										syncHarvestRarity(child, clientModel, v.Name, seed_data.MultiHarvest.Value)
+									end
+								end)
+							end
+
+							local mutationsValue = v:FindFirstChild("Mutations")
+							if mutationsValue then
+								local multiHarvest = seed_data.MultiHarvest.Value
+								mutationsValue.Changed:Connect(function()
+									local fruitPart = multiHarvest
+										and child:FindFirstChild("FruitPrompts")
+										and child.FruitPrompts:FindFirstChild(v.Name)
+										or child.PrimaryPart
+									if fruitPart then
+										mutationsChanged(clientModel, mutationsValue.Value, seed_data, fruitPart)
 									end
 								end)
 							end
