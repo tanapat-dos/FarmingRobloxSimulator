@@ -297,7 +297,10 @@ local function createSellGUI()
 	local frame = gui:WaitForChild("Frame")
 	local sellInventoryBtn = frame:FindFirstChild("SellInventory")
 	if sellInventoryBtn then
-		sellInventoryBtn:Destroy()
+		-- Repurpose as "Sell All" instead of destroying
+		if sellInventoryBtn:IsA("TextButton") then
+			sellInventoryBtn.Text = "💰 Sell All Inventory"
+		end
 	end
 
 	local buttons = {
@@ -313,6 +316,32 @@ local function createSellGUI()
 				respondAfter(1.5, "Something went wrong with selling.", true)
 			end
 
+		end,
+
+		SellInventory = function()
+			hideSellGUI()
+			Dialogue:Player("Sell everything in my inventory!")
+
+			local result = remotes.Sell:InvokeServer("bulkSell")
+
+			if result and result.success ~= nil then
+				respondAfter(0.5, result.msg, true)
+			else
+				respondAfter(1.5, "Something went wrong with selling.", true)
+			end
+		end,
+
+		SellAll = function()
+			hideSellGUI()
+			Dialogue:Player("Sell everything in my inventory!")
+
+			local result = remotes.Sell:InvokeServer("bulkSell")
+
+			if result and result.success ~= nil then
+				respondAfter(0.5, result.msg, true)
+			else
+				respondAfter(1.5, "Something went wrong with selling.", true)
+			end
 		end,
 
 		HowMuch = function()
@@ -433,6 +462,19 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 			local plantKey = part.Parent.Name
 			remotes.Harvest:FireServer(plantKey)
 		end
+	end
+
+	-- Catch-all: any prompt not explicitly handled above (upgrade boards, legendary egg,
+	-- rebirth altar, order board, etc.) would leave ALL prompts disabled forever.
+	-- Re-enable after a short beat so their own panel/remote fires first.
+	local handledNames = {
+		OpenShop = true, SellShop = true, OpenPetShop = true,
+		CropPriceBoard = true, HarvestPrompt = true, BuyPrompt = true,
+	}
+	if not handledNames[prompt.Name] then
+		task.delay(0.2, function()
+			toggleAllPrompts(true)
+		end)
 	end
 	
 end)

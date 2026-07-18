@@ -82,6 +82,18 @@ function Service.giveFruit(target:Player, fruitName: string, fruitAttributes: an
 		
 		Service.inventoryUpdated(target,fruitKey)
 
+		-- Track harvest + mutation achievement stats
+		local achieveService = cachedModules.Cache.AchievementService
+		if achieveService then
+			if achieveService.addFruitsHarvested then
+				achieveService.addFruitsHarvested(target, 1)
+			end
+			if achieveService.addMutationFound and typeof(mutations) == "string"
+				and (mutations:find("Golden") or mutations:find("Rainbow")) then
+				achieveService.addMutationFound(target, 1)
+			end
+		end
+
 	end
 end
 

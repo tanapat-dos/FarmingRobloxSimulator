@@ -85,6 +85,22 @@
 
         "CropSellLeaderboardService": {
           "$path": "src/server/Services/CropSellLeaderboardService.lua"
+        },
+
+        "GardenUpgradeService": {
+          "$path": "src/server/Services/GardenUpgradeService.lua"
+        },
+
+        "LegendaryEggService": {
+          "$path": "src/server/Services/LegendaryEggService.lua"
+        },
+
+        "DailyLoginService": {
+          "$path": "src/server/Services/DailyLoginService.lua"
+        },
+
+        "AchievementService": {
+          "$path": "src/server/Services/AchievementService.lua"
         }
       }
     },
@@ -179,6 +195,26 @@
           "$path": "src/client/OrderBoardClient.client.lua"
         },
 
+        "GardenUpgradeClient": {
+          "$path": "src/client/GardenUpgradeClient.client.lua"
+        },
+
+        "LegendaryEggClient": {
+          "$path": "src/client/LegendaryEggClient.client.lua"
+        },
+
+        "DailyLoginClient": {
+          "$path": "src/client/DailyLoginClient.client.lua"
+        },
+
+        "MenuBarClient": {
+          "$path": "src/client/MenuBarClient.client.lua"
+        },
+
+        "AchievementClient": {
+          "$path": "src/client/AchievementClient.client.lua"
+        },
+
         "Toasts": {
           "$path": "src/client/Toasts.client.lua"
         }
@@ -262,6 +298,10 @@
 
         "EnvironmentLighting": {
           "$path": "src/shared/Modules/EnvironmentLighting.lua"
+        },
+
+        "AchievementConfig": {
+          "$path": "src/shared/Modules/AchievementConfig.lua"
         },
 
         "NavigationHudState": {

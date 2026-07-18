@@ -345,7 +345,20 @@ end
 function Service.init()
 	updateRemote = ensureRemote("UpdateCropSellLeaderboard")
 
-	task.defer(function()
+	-- Also expose a RemoteFunction so clients can pull state on demand (e.g. on join).
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	local requestRemote = remotes:FindFirstChild("RequestCropLeaderboard")
+	if not requestRemote then
+		requestRemote = Instance.new("RemoteFunction")
+		requestRemote.Name = "RequestCropLeaderboard"
+		requestRemote.Parent = remotes
+	end
+	(requestRemote :: RemoteFunction).OnServerInvoke = function(_player)
+		return Service.getEntries()
+	end
+
+	-- Build the board first, then push initial state to any players already present.
+	task.spawn(function()
 		local ok, err = pcall(setupWorldBoard)
 		if not ok then
 			warn("[CropSellLeaderboardService] setupWorldBoard failed:", err)
@@ -353,16 +366,22 @@ function Service.init()
 			warn("[CropSellLeaderboardService] Board model was not created")
 		end
 
+		-- Push initial entries to players who joined before the board was ready.
 		for _, player in Players:GetPlayers() do
 			updateRemote:FireClient(player, Service.getEntries())
 		end
 	end)
 
 	Players.PlayerAdded:Connect(function(player)
-		task.defer(function()
-			if boardModel then
-				updateRemote:FireClient(player, Service.getEntries())
+		-- Wait for the board to finish building (up to 30 s), then send data.
+		-- We send regardless of boardModel so the client panel always populates.
+		task.spawn(function()
+			local waited = 0
+			while not boardModel and waited < 30 do
+				task.wait(1)
+				waited += 1
 			end
+			updateRemote:FireClient(player, Service.getEntries())
 		end)
 	end)
 end

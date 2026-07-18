@@ -274,6 +274,12 @@ local function deliver(player: Player, orderId: string)
 	end
 	data.OrderStats.Completed += 1
 
+	-- Track order-delivery achievement stat
+	local achieveService = cachedModules.Cache.AchievementService
+	if achieveService and achieveService.addOrderDelivered then
+		achieveService.addOrderDelivered(player, 1)
+	end
+
 	-- Replace the completed slot immediately
 	state.orders[orderIndex] = generateOrder()
 
@@ -285,11 +291,53 @@ local function deliver(player: Player, orderId: string)
 end
 
 -- ------------------------------------------------------------ board build
-local function buildBoard()
-	if workspace:FindFirstChild("OrderBoard") then
+-- The board is an editable Workspace model. If a Model named "OrderBoard"
+-- already exists (placed/moved by hand in Studio), we respect its position
+-- and only wire up behaviour. Otherwise we build one procedurally next to
+-- the sell shop (or at an "OrderBoardAnchor" part) as a fallback.
+
+local function findBoardPart(model: Model): BasePart?
+	local named = model:FindFirstChild("Board")
+	if named and named:IsA("BasePart") then
+		return named
+	end
+	return model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+end
+
+local function addBoardSurfaceGuis(boardPart: BasePart)
+	if boardPart:FindFirstChildWhichIsA("SurfaceGui") then
 		return
 	end
+	for _, faceEnum in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = faceEnum
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 40
+		gui.Parent = boardPart
 
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.fromScale(1, 0.45)
+		title.BackgroundTransparency = 1
+		title.Text = "📋 ORDERS"
+		title.TextColor3 = Color3.fromRGB(255, 240, 200)
+		title.TextStrokeTransparency = 0.4
+		title.Font = Enum.Font.GothamBold
+		title.TextScaled = true
+		title.Parent = gui
+
+		local subtitle = Instance.new("TextLabel")
+		subtitle.Position = UDim2.fromScale(0, 0.5)
+		subtitle.Size = UDim2.fromScale(1, 0.3)
+		subtitle.BackgroundTransparency = 1
+		subtitle.Text = "Deliver crops, earn a premium!"
+		subtitle.TextColor3 = Color3.fromRGB(235, 240, 250)
+		subtitle.Font = Enum.Font.Gotham
+		subtitle.TextScaled = true
+		subtitle.Parent = gui
+	end
+end
+
+local function buildBoardModel(): Model?
 	-- Placement: explicit anchor wins, else beside the sell shop pad
 	local anchor = workspace:FindFirstChild("OrderBoardAnchor", true)
 	local baseCFrame
@@ -300,8 +348,8 @@ local function buildBoard()
 		local sell = shops and shops:FindFirstChild("SellStuff")
 		local pad = sell and sell:FindFirstChild("TPPart", true)
 		if not (pad and pad:IsA("BasePart")) then
-			warn("[OrderService] No OrderBoardAnchor or Shops.SellStuff.TPPart — order board not spawned.")
-			return
+			warn("[OrderService] No OrderBoard model, OrderBoardAnchor or Shops.SellStuff.TPPart — order board not spawned.")
+			return nil
 		end
 		baseCFrame = pad.CFrame * CFrame.new(8, pad.Size.Y / 2, 0)
 	end
@@ -325,7 +373,6 @@ local function buildBoard()
 		part.Color = Color3.fromRGB(105, 78, 52)
 		part.Anchored = true
 		part.Parent = model
-		return part
 	end
 	post(-postX)
 	post(postX)
@@ -348,53 +395,52 @@ local function buildBoard()
 	cap.Anchored = true
 	cap.Parent = model
 
-	for _, faceEnum in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		local gui = Instance.new("SurfaceGui")
-		gui.Face = faceEnum
-		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		gui.PixelsPerStud = 40
-		gui.Parent = board
+	model.PrimaryPart = board
+	model.Parent = workspace
+	return model
+end
 
-		local title = Instance.new("TextLabel")
-		title.Size = UDim2.fromScale(1, 0.45)
-		title.BackgroundTransparency = 1
-		title.Text = "📋 ORDERS"
-		title.TextColor3 = Color3.fromRGB(255, 240, 200)
-		title.TextStrokeTransparency = 0.4
-		title.Font = Enum.Font.GothamBold
-		title.TextScaled = true
-		title.Parent = gui
-
-		local subtitle = Instance.new("TextLabel")
-		subtitle.Position = UDim2.fromScale(0, 0.5)
-		subtitle.Size = UDim2.fromScale(1, 0.3)
-		subtitle.BackgroundTransparency = 1
-		subtitle.Text = "Deliver crops, earn a premium!"
-		subtitle.TextColor3 = Color3.fromRGB(235, 240, 250)
-		subtitle.Font = Enum.Font.Gotham
-		subtitle.TextScaled = true
-		subtitle.Parent = gui
+local function setupBoard()
+	local board = workspace:FindFirstChild("OrderBoard", true)
+	if not (board and board:IsA("Model")) then
+		board = buildBoardModel()
+	end
+	if not board then
+		return
 	end
 
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "View Orders"
-	prompt.ObjectText = "Order Board"
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 12
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = board
+	local boardPart = findBoardPart(board)
+	if not boardPart then
+		warn("[OrderService] OrderBoard has no board part — cannot attach prompt.")
+		return
+	end
+	if not board.PrimaryPart then
+		board.PrimaryPart = boardPart
+	end
+
+	addBoardSurfaceGuis(boardPart)
+
+	local prompt = board:FindFirstChildWhichIsA("ProximityPrompt", true)
+	if not prompt then
+		local newPrompt = Instance.new("ProximityPrompt")
+		newPrompt.ActionText = "View Orders"
+		newPrompt.ObjectText = "Order Board"
+		newPrompt.HoldDuration = 0
+		newPrompt.MaxActivationDistance = 12
+		newPrompt.RequiresLineOfSight = false
+		newPrompt.Parent = boardPart
+		prompt = newPrompt
+	end
 
 	prompt.Triggered:Connect(function(player)
 		pushState(player)
 		orderRemote:FireClient(player, "open")
 	end)
-
-	model.Parent = workspace
 end
 
 -- --------------------------------------------------------------------- init
 function Service.init()
-	buildBoard()
+	setupBoard()
 
 	orderRemote.OnServerEvent:Connect(function(player, action, payload)
 		if player:GetAttribute("DataLoaded") ~= true then

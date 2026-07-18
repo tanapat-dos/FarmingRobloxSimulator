@@ -9,12 +9,35 @@ EconomyBalance.STARTING_CASH = 500
 
 -- Plot progression: every garden has 8 physical soil beds; bed 1 is free,
 -- beds 2..maxOwned are purchasable in order, the rest stay reserved.
+-- Rescaled to use all 8 physical beds with a steep exponential curve —
+-- unlocking the last plot is a genuine late-game milestone, not a Day 1 buy.
 EconomyBalance.PLOTS = {
 	startOwned = 1,
-	maxOwned = 6,
+	maxOwned = 8,
 	cropsPerPlot = 10,
 	-- prices[n] = cost of the nth bed (index 1 is the free starter bed)
-	prices = { 0, 2500, 10000, 30000, 75000, 150000 },
+	prices = { 0, 5000, 20000, 60000, 150000, 350000, 750000, 1500000 },
+}
+
+-- Garden upgrades purchased from the Upgrade Board (server authoritative).
+-- GrowthReduction: leveled, permanent % off crop grow time. levels[n] is the
+-- state AT level n (pct = total reduction, price = cost to go from n-1 -> n).
+-- Rescaled to 8 levels with a much steeper curve: maxing out now costs
+-- ~$2.9M cumulative (vs. ~$180k before), so it's a long-term grind rather
+-- than something a player finishes in one or two sessions.
+EconomyBalance.UPGRADES = {
+	GrowthReduction = {
+		levels = {
+			{ pct = 5,  price = 8000 },
+			{ pct = 10, price = 25000 },
+			{ pct = 15, price = 70000 },
+			{ pct = 20, price = 160000 },
+			{ pct = 25, price = 350000 },
+			{ pct = 30, price = 650000 },
+			{ pct = 35, price = 1100000 },
+			{ pct = 40, price = 1800000 },
+		},
+	},
 }
 
 -- Rebirth: reset cash/seeds/crops/plots for a permanent sell multiplier.
@@ -125,12 +148,14 @@ EconomyBalance.PET_GROWTH_REDUCTION = {
 	},
 }
 
+-- Legendary tier (Divine) is premium: bought with Diamonds only, not cash,
+-- and is excluded from the cash restock shop.
 EconomyBalance.EGGS = {
 	["Common Egg"] = { cost = 300, rarity = "Common" },
 	["Uncommon Egg"] = { cost = 1800, rarity = "Uncommon" },
 	["Godly Egg"] = { cost = 7500, rarity = "Rare" },
 	["Galactic Egg"] = { cost = 30000, rarity = "Epic" },
-	["Divine Egg"] = { cost = 120000, rarity = "Legendary" },
+	["Divine Egg"] = { cost = 120000, rarity = "Legendary", currency = "Diamonds", diamondCost = 100 },
 }
 
 -- BaseValue drives sell price via GetFruitValue (baseValue * weight^2 * mutations * rarity).
@@ -210,8 +235,42 @@ function EconomyBalance.getEffectiveGrowthTime(baseSeconds: number, growthReduct
 	return math.max(1, baseSeconds * (1 - reduction / 100))
 end
 
+-- Growth reductions from pets and the Upgrade Board stack additively, capped at 90%.
+function EconomyBalance.getTotalGrowthReduction(petPct: number?, upgradePct: number?): number
+	local pet = typeof(petPct) == "number" and petPct or 0
+	local upgrade = typeof(upgradePct) == "number" and upgradePct or 0
+	return math.clamp(pet + upgrade, 0, 90)
+end
+
+function EconomyBalance.getGrowthUpgradeMaxLevel(): number
+	return #EconomyBalance.UPGRADES.GrowthReduction.levels
+end
+
+-- Total grow-time reduction % granted at a given upgrade level (0 = none).
+function EconomyBalance.getGrowthUpgradePct(level: number): number
+	local levels = EconomyBalance.UPGRADES.GrowthReduction.levels
+	local lvl = math.clamp(math.floor(level or 0), 0, #levels)
+	if lvl <= 0 then
+		return 0
+	end
+	return levels[lvl].pct
+end
+
+-- Cost to purchase the given level (nil if out of range / already maxed).
+function EconomyBalance.getGrowthUpgradePrice(level: number): number?
+	local levels = EconomyBalance.UPGRADES.GrowthReduction.levels
+	local entry = levels[math.floor(level or 0)]
+	return entry and entry.price or nil
+end
+
 function EconomyBalance.getEggData(): { [string]: { cost: number, rarity: string } }
 	return EconomyBalance.EGGS
+end
+
+-- True for premium eggs paid in Diamonds (excluded from the cash restock shop).
+function EconomyBalance.isDiamondEgg(eggName: string): boolean
+	local egg = EconomyBalance.EGGS[eggName]
+	return egg ~= nil and egg.currency == "Diamonds"
 end
 
 function EconomyBalance.getEggOrder(): { string }

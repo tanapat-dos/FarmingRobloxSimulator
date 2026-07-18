@@ -175,6 +175,12 @@ function Service.plantSeed(player: Player, seedName: string, location: CFrame, p
 
 					plotService.updatePlot(player, "seedPlanted", {itemKey = key})
 
+					-- Track achievement stat
+					local achieveService = cachedModules.Cache.AchievementService
+					if achieveService and achieveService.addCropsPlanted then
+						achieveService.addCropsPlanted(player, 1)
+					end
+
 				end
 
 			end

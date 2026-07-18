@@ -96,6 +96,12 @@ local function performRebirth(player: Player)
 	local totalBoost = math.floor(data.Rebirths * REBIRTH.boostPerRebirth * 100)
 	notify(player, ("🌟 Rebirth %d! You now earn +%d%% on every sale, forever."):format(
 		data.Rebirths, totalBoost), "success")
+
+	-- Track rebirth achievement stat
+	local achieveService = cachedModules.Cache.AchievementService
+	if achieveService and achieveService.syncRebirths then
+		achieveService.syncRebirths(player)
+	end
 end
 
 local function onAltarTriggered(player: Player)

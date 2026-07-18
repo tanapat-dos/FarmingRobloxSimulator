@@ -47,7 +47,9 @@ local function generateEggStock()
 
 	for _, eggName in ipairs(EGG_ORDER) do
 		local egg = EGG_DATA[eggName]
-		if egg then
+		-- Diamond (Legendary) eggs are sold separately for Diamonds — keep them
+		-- out of the cash restock shop entirely.
+		if egg and egg.currency ~= "Diamonds" then
 			local available = GUARANTEED_EGGS[eggName] or ShopStock.rollAppearance(egg.rarity)
 			if available then
 				local range = ShopStock.getStockRange(egg.rarity, ShopStock.EGG_STOCK_RANGE)
@@ -325,6 +327,104 @@ local function getRandomPet(eggName)
 	return pets[math.random(1, #pets)]
 end
 
+-- Rolls one egg for a player. Supports cash eggs (stock-limited) and premium
+-- Diamond eggs (always available, paid in 💎). Fires PetRollResult and also
+-- returns the result so other services can reuse this.
+function Service.rollEgg(player: Player, eggName: string)
+	local egg = EGG_DATA[eggName]
+	if not egg then
+		return { success = false, msg = "Unknown egg." }
+	end
+
+	local moneyService = cachedModules.Cache.MoneyService
+	local dataService = cachedModules.Cache.DataService
+	local isDiamond = egg.currency == "Diamonds"
+
+	local stock, eggStock
+	if isDiamond then
+		if not moneyService.hasEnoughDiamonds(player, egg.diamondCost or 0) then
+			local r = { success = false, msg = "Not enough diamonds!", needDiamonds = true }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
+		end
+	else
+		stock = Service:GetCurrentStock()
+		eggStock = stock and stock[eggName]
+		if not eggStock or eggStock.StockAmount <= 0 or not eggStock.IsInStock then
+			local r = { success = false, msg = "This egg is out of stock!" }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
+		end
+		if not moneyService.hasEnoughCash(player, egg.cost) then
+			local r = { success = false, msg = "Not enough cash!" }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
+		end
+	end
+
+	local petName = getRandomPet(eggName)
+	if not petName then
+		local r = { success = false, msg = "No pets in this egg!" }
+		remotes.PetRollResult:FireClient(player, r)
+		return r
+	end
+
+	-- Charge only after we know the roll can succeed.
+	if isDiamond then
+		if not moneyService.removeDiamonds(player, egg.diamondCost or 0) then
+			local r = { success = false, msg = "Not enough diamonds!", needDiamonds = true }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
+		end
+	else
+		moneyService.removeCash(player, egg.cost)
+		eggStock.StockAmount -= 1
+		if IS_STUDIO then
+			studioStock = stock
+		else
+			Service:SaveStockToMemoryStore(stock)
+		end
+	end
+
+	local data = dataService.getData(player)
+	local petBoost = EconomyBalance.getPetBoostMultiplier(eggName, petName)
+	local growthReduction = EconomyBalance.getPetGrowthReductionPct(eggName, petName)
+	local petRecord = {
+		id = generatePetId(),
+		name = petName,
+		egg = eggName,
+		boost = petBoost,
+		growthReduction = growthReduction,
+		rarity = egg.rarity,
+	}
+
+	if data then
+		if not data.OwnedPets then
+			data.OwnedPets = {}
+		end
+		table.insert(data.OwnedPets, petRecord)
+	end
+
+	Service.equipPet(player, petRecord.id)
+
+	-- Track pets owned for achievements
+	local achieveService = cachedModules.Cache.AchievementService
+	if achieveService and achieveService.syncPetsOwned then
+		achieveService.syncPetsOwned(player)
+	end
+
+	local r = {
+		success = true,
+		petName = petName,
+		eggName = eggName,
+		boost = petBoost,
+		growthReduction = growthReduction,
+		rarity = egg.rarity,
+	}
+	remotes.PetRollResult:FireClient(player, r)
+	return r
+end
+
 function Service.init()
 	local moneyService = cachedModules.Cache.MoneyService
 	local dataService = cachedModules.Cache.DataService
@@ -393,65 +493,13 @@ function Service.init()
 	end)
 
 	remotes.PetRoll.OnServerEvent:Connect(function(player, eggName)
-		local egg = EGG_DATA[eggName]
-		if not egg then
+		if player:GetAttribute("DataLoaded") ~= true then
 			return
 		end
-
-		local stock = Service:GetCurrentStock()
-		local eggStock = stock and stock[eggName]
-		if not eggStock or eggStock.StockAmount <= 0 or not eggStock.IsInStock then
-			remotes.PetRollResult:FireClient(player, { success = false, msg = "This egg is out of stock!" })
+		if typeof(eggName) ~= "string" then
 			return
 		end
-
-		if not moneyService.hasEnoughCash(player, egg.cost) then
-			remotes.PetRollResult:FireClient(player, { success = false, msg = "Not enough cash!" })
-			return
-		end
-		local petName = getRandomPet(eggName)
-		if not petName then
-			remotes.PetRollResult:FireClient(player, { success = false, msg = "No pets in this egg!" })
-			return
-		end
-
-		moneyService.removeCash(player, egg.cost)
-		eggStock.StockAmount -= 1
-		if IS_STUDIO then
-			studioStock = stock
-		else
-			Service:SaveStockToMemoryStore(stock)
-		end
-
-		local data = dataService.getData(player)
-		local petBoost = EconomyBalance.getPetBoostMultiplier(eggName, petName)
-		local growthReduction = EconomyBalance.getPetGrowthReductionPct(eggName, petName)
-		local petRecord = {
-			id = generatePetId(),
-			name = petName,
-			egg = eggName,
-			boost = petBoost,
-			growthReduction = growthReduction,
-			rarity = egg.rarity,
-		}
-
-		if data then
-			if not data.OwnedPets then
-				data.OwnedPets = {}
-			end
-			table.insert(data.OwnedPets, petRecord)
-		end
-
-		Service.equipPet(player, petRecord.id)
-
-		remotes.PetRollResult:FireClient(player, {
-			success = true,
-			petName = petName,
-			eggName = eggName,
-			boost = petBoost,
-			growthReduction = growthReduction,
-			rarity = egg.rarity,
-		})
+		Service.rollEgg(player, eggName)
 	end)
 end
 

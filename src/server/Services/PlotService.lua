@@ -206,6 +206,42 @@ function Service.buyBed(buyer: Player, plot: Model, bedIndex: number)
 		data.PlotsOwned, data.PlotsOwned * PLOTS.cropsPerPlot), "success")
 end
 
+-- Board-driven purchase: unlock the next bed in order (no specific bed prompt).
+-- Returns (success, message) so the Upgrade Board can report the result.
+function Service.buyPlotUpgrade(buyer: Player): (boolean, string)
+	local dataService = cachedModules.Cache.DataService
+	local moneyService = cachedModules.Cache.MoneyService
+
+	local data = dataService.getData(buyer)
+	if not data then
+		return false, "Your data isn't loaded yet."
+	end
+
+	local owned = Service.getOwnedBedCount(buyer)
+	if owned >= PLOTS.maxOwned then
+		return false, "All plots are already unlocked!"
+	end
+
+	local nextIndex = owned + 1
+	local price = PLOTS.prices[nextIndex]
+	if typeof(price) ~= "number" or price <= 0 then
+		return false, "This plot can't be purchased."
+	end
+
+	if not moneyService.removeCash(buyer, price) then
+		return false, ("You need $%d for this plot."):format(price)
+	end
+
+	data.PlotsOwned = nextIndex
+	local plot = Service.getPlot(buyer)
+	if plot then
+		Service.setupBeds(buyer, plot)
+	end
+
+	return true, ("Plot %d unlocked! You can now grow %d crops."):format(
+		nextIndex, nextIndex * PLOTS.cropsPerPlot)
+end
+
 function Service.setupBeds(player: Player, plot: Model)
 	local owned = Service.getOwnedBedCount(player)
 
@@ -527,12 +563,15 @@ function Service.dataLoaded(player: Player)
 	Service.setupBeds(player, plot)
 
 	-- 🌱 Load player plants
-	local plotData = cachedModules.Cache.DataService.getData(player).PlotData
-	task.spawn(function()
-		for key: string, data: any in plotData do
-			Service.createServerModel(player, key, data)
-		end
-	end)
+	local profile = cachedModules.Cache.DataService.getData(player)
+	local plotData = profile and profile.PlotData
+	if plotData then
+		task.spawn(function()
+			for key: string, data: any in plotData do
+				Service.createServerModel(player, key, data)
+			end
+		end)
+	end
 
 	--warn(player, plotData)
 end
@@ -651,10 +690,10 @@ function Service.init()
 						end
 					else
 						local baseGrowthTime = math.max(1, foundSeed.GrowthTime.Value)
-						local growthReduction = player:GetAttribute("PetGrowthReduction")
-						if typeof(growthReduction) ~= "number" then
-							growthReduction = 0
-						end
+						local growthReduction = EconomyBalance.getTotalGrowthReduction(
+							player:GetAttribute("PetGrowthReduction"),
+							player:GetAttribute("UpgradeGrowthReduction")
+						)
 						local growthTime = EconomyBalance.getEffectiveGrowthTime(baseGrowthTime, growthReduction)
 						if os.time() - lastGrowthInc.Value >= 1 then
 							lastGrowthInc.Value = os.time()

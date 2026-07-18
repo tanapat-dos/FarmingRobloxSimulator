@@ -43,6 +43,9 @@ function Service.init()
 	local moneyService = cachedModules.Cache.MoneyService
 	local plotService = cachedModules.Cache.PlotService
 	local inventoryService = cachedModules.Cache.InventoryService
+	local gardenUpgradeService = cachedModules.Cache.GardenUpgradeService
+	local dailyLoginService = cachedModules.Cache.DailyLoginService
+	local achievementService = cachedModules.Cache.AchievementService
 
 	local function onCharacterAdded(character: Model)
 		inventoryService.characterAdded(character)
@@ -53,6 +56,15 @@ function Service.init()
 		if profile then
 			moneyService.dataLoaded(player)
 			plotService.dataLoaded(player)
+			if gardenUpgradeService and gardenUpgradeService.dataLoaded then
+				gardenUpgradeService.dataLoaded(player)
+			end
+			if dailyLoginService and dailyLoginService.dataLoaded then
+				dailyLoginService.dataLoaded(player)
+			end
+			if achievementService and achievementService.dataLoaded then
+				achievementService.dataLoaded(player)
+			end
 
 			if player.Character then
 				onCharacterAdded(player.Character)

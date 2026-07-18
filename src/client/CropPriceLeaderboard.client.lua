@@ -213,6 +213,26 @@ updateRemote.OnClientEvent:Connect(function(entries: { CropSellPriceBoard.Leader
 	end
 end)
 
+-- Actively pull current leaderboard data once the player is fully loaded.
+-- This covers the case where the server's PlayerAdded push arrived before
+-- this LocalScript registered its listener (common on published servers).
+task.spawn(function()
+	local timeout = 30
+	while timeout > 0 and not player:GetAttribute("DataLoaded") do
+		task.wait(0.5)
+		timeout -= 0.5
+	end
+	local requestRemote = remotes:WaitForChild("RequestCropLeaderboard", 10)
+	if requestRemote and requestRemote:IsA("RemoteFunction") then
+		local ok, result = pcall(function()
+			return (requestRemote :: RemoteFunction):InvokeServer()
+		end)
+		if ok and typeof(result) == "table" then
+			renderEntries(result)
+		end
+	end
+end)
+
 local function showPanel()
 	if panelOpen then
 		return

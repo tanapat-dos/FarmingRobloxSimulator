@@ -313,10 +313,10 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 		end
 
 		local totalTime = math.max(1, growthTimeValue.Value)
-		local growthReduction = player:GetAttribute("PetGrowthReduction")
-		if typeof(growthReduction) ~= "number" then
-			growthReduction = 0
-		end
+		local growthReduction = EconomyBalance.getTotalGrowthReduction(
+			player:GetAttribute("PetGrowthReduction"),
+			player:GetAttribute("UpgradeGrowthReduction")
+		)
 		local effectiveTime = EconomyBalance.getEffectiveGrowthTime(totalTime, growthReduction)
 		local remaining = effectiveTime * (1 - growthPercentage.Value / 100)
 		remaining = math.max(0, remaining)
@@ -330,6 +330,7 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 	refresh()
 	growthPercentage.Changed:Connect(refresh)
 	player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
+	player:GetAttributeChangedSignal("UpgradeGrowthReduction"):Connect(refresh)
 
 	task.spawn(function()
 		while billboard.Parent and growthPercentage.Value < 100 do

@@ -27,6 +27,14 @@ for _, seedName in ipairs(SeedData.getSeedOrder()) do
 	end
 end
 
+-- Map DevProduct IDs to diamond payouts (premium currency packs).
+local ProductIdToDiamonds = {}
+for _, pack in ipairs(Monetization.DiamondPacks) do
+	if typeof(pack.id) == "number" and pack.id > 0 then
+		ProductIdToDiamonds[pack.id] = pack.diamonds
+	end
+end
+
 -- Restock shop for a single player
 local function HandleDevProductRestock(player)
 	local SeedShopService = cachedModules.Cache.SeedShopService
@@ -64,6 +72,22 @@ function Service.init()
 				return Enum.ProductPurchaseDecision.PurchaseGranted
 			else
 				warn("❌ Failed to grant seed:", err)
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+		end
+
+		-- 💎 Handle diamond pack purchase
+		local diamondAmount = ProductIdToDiamonds[productId]
+		if diamondAmount then
+			local MoneyService = cachedModules.Cache.MoneyService
+			local success, err = pcall(function()
+				MoneyService.giveDiamonds(player, diamondAmount)
+			end)
+			if success then
+				print("✅ Granted", diamondAmount, "diamonds to", player.Name)
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			else
+				warn("❌ Failed to grant diamonds:", err)
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 		end

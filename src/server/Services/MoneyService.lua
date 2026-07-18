@@ -120,13 +120,71 @@ function Service.dataLoaded(player: Player)
 	rebirths.Value = profileData and profileData.Rebirths or 0
 	rebirths.Parent = leaderstats
 
+	local diamonds = Instance.new("IntValue")
+	diamonds.Name = "Diamonds"
+	diamonds.Value = profileData and profileData.Diamonds or 0
+	diamonds.Parent = leaderstats
+
 	leaderstats.Parent = player
 	player:SetAttribute("FriendBoost", 1)
 	player:SetAttribute("PetBoost", 1)
 	player:SetAttribute("PetGrowthReduction", 0)
 	player:SetAttribute("Rebirths", profileData and profileData.Rebirths or 0)
 	Service.updateCashCount(player)
+	Service.updateDiamondCount(player)
 	updateFriendBoost(player)
+end
+
+-- ------------------------------------------------------------------ diamonds
+-- Premium currency. Never boosted by friend/pet/rebirth multipliers.
+function Service.updateDiamondCount(player: Player)
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if not profileData then
+		return
+	end
+	local amount = profileData.Diamonds or 0
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats and leaderstats:FindFirstChild("Diamonds") then
+		leaderstats.Diamonds.Value = amount
+	end
+	player:SetAttribute("Diamonds", amount)
+end
+
+function Service.giveDiamonds(player: Player, amount: number): number
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if profileData and typeof(amount) == "number" and amount > 0 then
+		amount = math.floor(amount)
+		profileData.Diamonds = (profileData.Diamonds or 0) + amount
+		Service.updateDiamondCount(player)
+		return amount
+	end
+	return 0
+end
+
+function Service.hasEnoughDiamonds(player: Player, amount: number): boolean
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if typeof(amount) ~= "number" then
+		return false
+	end
+	return profileData ~= nil and (profileData.Diamonds or 0) >= amount
+end
+
+function Service.removeDiamonds(player: Player, amount: number): boolean
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if typeof(amount) ~= "number" or amount <= 0 then
+		return false
+	end
+	amount = math.floor(amount)
+	if profileData and (profileData.Diamonds or 0) >= amount then
+		profileData.Diamonds -= amount
+		Service.updateDiamondCount(player)
+		return true
+	end
+	return false
 end
 
 function Service.getCashMultiplier(target: Player): number
@@ -151,6 +209,11 @@ function Service.giveMoney(target: Player, amount: number)
 		local boostedAmount = math.floor(amount * Service.getCashMultiplier(target) + 0.5)
 		profileData.Cash += boostedAmount
 		Service.updateCashCount(target)
+		-- Track total earned for achievements (pre-boost base amount)
+		local achieveService = cachedModules.Cache.AchievementService
+		if achieveService and achieveService.addEarned then
+			task.defer(achieveService.addEarned, target, boostedAmount)
+		end
 		return boostedAmount
 	end
 	return 0
