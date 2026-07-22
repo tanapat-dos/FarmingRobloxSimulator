@@ -1,11 +1,17 @@
+--!strict
 -- Client-safe VFX for per-harvest rarity.
--- Legacy brick-style glow: Highlight fill + PointLight on the existing mesh.
--- No separate aura model or ReplicatedStorage asset required.
+-- Highlight + PointLight + RarityAuras sparkler (matches legacy crop harvest glow).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SeedRarity = require(script.Parent.SeedRarity)
 local HarvestRarityConfig = require(script.Parent.HarvestRarityConfig)
 
 local HarvestRarityEffects = {}
+
+local AURA_ATTACHMENT_NAME = "HarvestRarityAura"
+
+local cachedAuraTemplate: Attachment? = nil
 
 local function getRarityColor(rarity: string): Color3
 	local style = SeedRarity[rarity]
@@ -38,6 +44,67 @@ local function getLightHost(target: Instance, root: Model): BasePart?
 	return root.PrimaryPart or root:FindFirstChildWhichIsA("BasePart", true)
 end
 
+local function getAuraTemplate(): Attachment?
+	if cachedAuraTemplate then
+		return cachedAuraTemplate
+	end
+
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local aurasFolder = assets and assets:FindFirstChild("RarityAuras")
+	local generic = aurasFolder and aurasFolder:FindFirstChild("Generic")
+	if generic and generic:IsA("Attachment") then
+		cachedAuraTemplate = generic
+		return generic
+	end
+
+	return nil
+end
+
+local function tintParticleColor(emitter: ParticleEmitter, color: Color3)
+	local highlight = Color3.new(
+		math.min(1, color.R + 0.2),
+		math.min(1, color.G + 0.2),
+		math.min(1, color.B + 0.2)
+	)
+	emitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, color),
+		ColorSequenceKeypoint.new(1, highlight),
+	})
+end
+
+local function removeAuraFromRoot(root: Instance)
+	for _, desc in root:GetDescendants() do
+		if desc:IsA("Attachment") and desc.Name == AURA_ATTACHMENT_NAME then
+			desc:Destroy()
+		end
+	end
+end
+
+local function applySparklerAura(host: BasePart, color: Color3, rateScale: number)
+	local existing = host:FindFirstChild(AURA_ATTACHMENT_NAME)
+	if existing then
+		existing:Destroy()
+	end
+
+	local template = getAuraTemplate()
+	if not template then
+		return
+	end
+
+	local aura = template:Clone()
+	aura.Name = AURA_ATTACHMENT_NAME
+
+	for _, desc in aura:GetDescendants() do
+		if desc:IsA("ParticleEmitter") then
+			tintParticleColor(desc, color)
+			desc.Rate *= rateScale
+			desc.Enabled = true
+		end
+	end
+
+	aura.Parent = host
+end
+
 function HarvestRarityEffects.removeFromTarget(target: Instance)
 	local root = findEffectRoot(target)
 	if not root then
@@ -54,6 +121,8 @@ function HarvestRarityEffects.removeFromTarget(target: Instance)
 			desc:Destroy()
 		end
 	end
+
+	removeAuraFromRoot(root)
 end
 
 function HarvestRarityEffects.applyToTarget(target: Instance, rarity: string)
@@ -95,6 +164,9 @@ function HarvestRarityEffects.applyToTarget(target: Instance, rarity: string)
 		light.Range = glow.range
 		light.Shadows = false
 		light.Parent = lightHost
+
+		local rateScale = 0.85 + glow.brightness * 0.35
+		applySparklerAura(lightHost, color, rateScale)
 	end
 end
 

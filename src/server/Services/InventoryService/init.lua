@@ -229,6 +229,9 @@ function Service.createNewTool(player: Player, toolName: string)
 		toolClone:SetAttribute("Count", itemData.Count)
 		toolClone:SetAttribute("isSeed", true)
 
+		local SeedToolVisual = require(modules.SeedToolVisual)
+		SeedToolVisual.apply(toolClone)
+
 		toolClone.Parent = player.Backpack
 		
 		local activator = script.SeedActivator:Clone()
@@ -243,6 +246,11 @@ function Service.createNewTool(player: Player, toolName: string)
 		local rarity, mutations, weight, fruitName = fruitNameParser(itemData)
 		if weight > 0 and fruitName then
 			-- valid fruit
+			local seedData = seedDataModule.getData(fruitName .. " Seed")
+			local multiHarvest = seedData
+				and seedData:FindFirstChild("MultiHarvest")
+				and seedData.MultiHarvest.Value == true
+
 			local foundTool = ReplicatedStorage.Assets.Crops:FindFirstChild(fruitName)
 			if foundTool then
 				local toolClone: Tool = foundTool:Clone()
@@ -278,11 +286,21 @@ function Service.createNewTool(player: Player, toolName: string)
 
 				local handle = toolClone:FindFirstChild("Handle")
 				if handle and handle:IsA("BasePart") then
-					local plantFolder = ReplicatedStorage.Assets.Plants:FindFirstChild(fruitName)
-					local clientModel = plantFolder and plantFolder:FindFirstChild("ClientModel")
-					if clientModel then
-						local _, size = clientModel:GetBoundingBox()
-						local longestAxis = math.max(size.X, size.Y, size.Z)
+					local longestAxis = math.max(handle.Size.X, handle.Size.Y, handle.Size.Z)
+					if not multiHarvest then
+						local plantFolder = ReplicatedStorage.Assets.Plants:FindFirstChild(fruitName)
+						local clientModel = plantFolder and plantFolder:FindFirstChild("ClientModel")
+						if clientModel then
+							local _, size = clientModel:GetBoundingBox()
+							longestAxis = math.max(size.X, size.Y, size.Z)
+						end
+					end
+
+					if multiHarvest then
+						-- Perennial fruits (Mango): ClientModel bbox includes the whole tree — use handle only.
+						toolClone.Grip = CFrame.new(0, 0, 0) * CFrame.Angles(math.rad(90), 0, 0)
+						toolClone.GripPos = Vector3.new(0, handle.Size.Y * 0.4, 0)
+					else
 						toolClone.GripPos = Vector3.new(0, 0, longestAxis * 0.125 * displayScale)
 					end
 				end

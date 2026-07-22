@@ -9,6 +9,7 @@ local modules = replicatedStorage:WaitForChild("Modules")
 
 local seedModule = require(modules.SeedData)
 local plantKeyUtil = require(modules.PlantKeyUtil)
+local PlantVisualScale = require(modules.PlantVisualScale)
 local EconomyBalance = require(modules.EconomyBalance)
 local harvestRarityEffects = require(modules.HarvestRarityEffects)
 local plantsfolder = assets.Plants
@@ -358,7 +359,9 @@ local function childAdded(child: Instance)
 			local clientModel: Model = foundModel.ClientModel:Clone()
 			clientModel.Name = identifier
 			
-			clientModel:ScaleTo(serverConfig.PlantSize.Value)
+			local worldScale = PlantVisualScale.getWorldScale(trueName, serverConfig.PlantSize.Value)
+
+			clientModel:ScaleTo(worldScale)
 			
 			clientModel:PivotTo(child:GetPivot())
 			

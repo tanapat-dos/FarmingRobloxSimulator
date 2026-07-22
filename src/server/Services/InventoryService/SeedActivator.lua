@@ -5,6 +5,7 @@ local remotes = replicatedStorage.RemoteEvents
 
 local cachedModules = require(game.ServerScriptService.Server.CachedModules)
 local plantKeyUtil = require(replicatedStorage.Modules.PlantKeyUtil)
+local PlantVisualScale = require(replicatedStorage.Modules.PlantVisualScale)
 local seedService = cachedModules.Cache.SeedShopService
 local plotService = cachedModules.Cache.PlotService
 
@@ -46,8 +47,9 @@ Tool.Activated:Connect(function()
 				
 				-- Plant Scale
 				local PlantSize = seedService.getRandomPlantSize(Tool.Name, {})
-				
-				mockPlantModel:ScaleTo(PlantSize)
+				local worldScale = PlantVisualScale.getWorldScale(cropName, PlantSize)
+
+				mockPlantModel:ScaleTo(worldScale)
 				
 				local plotCFrame, plotSize = playerPlot.Soil:GetBoundingBox()
 				

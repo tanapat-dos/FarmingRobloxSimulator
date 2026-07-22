@@ -23,24 +23,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
+local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local Service = {}
 
 local SECONDS_PER_DAY = 86400
 local STREAK_LENGTH = 7
 
--- Rewards indexed by streak day (1..7).
--- cash  = base cash grant (before rebirth/friend/pet multipliers).
--- diamonds = 0 most days; day 7 gives a small diamond bonus.
-local REWARDS = {
-	{ day = 1, cash = 500,   diamonds = 0  },
-	{ day = 2, cash = 1000,  diamonds = 0  },
-	{ day = 3, cash = 2000,  diamonds = 0  },
-	{ day = 4, cash = 3500,  diamonds = 0  },
-	{ day = 5, cash = 6000,  diamonds = 0  },
-	{ day = 6, cash = 10000, diamonds = 0  },
-	{ day = 7, cash = 20000, diamonds = 10 },   -- milestone: 💎 10 diamonds
-}
+local REWARDS = EconomyBalance.DAILY_LOGIN_REWARDS
 Service.REWARDS = REWARDS
 
 local function ensureRemote(name: string): RemoteEvent

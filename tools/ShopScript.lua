@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
 
 local SeedRarityColors = require(ReplicatedStorage:WaitForChild("Modules").SeedRarity)
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
@@ -146,8 +147,13 @@ end)
 
 local restockButton = shopFrame:WaitForChild("RESTOCKButton")
 local RESTOCK_PRODUCT_ID = Monetization.DevProducts.RestockShop
+local requestRestockRemote = RemoteEvents:WaitForChild("RequestSeedShopRestock", 10)
 restockButton.MouseButton1Click:Connect(function()
-	MarketplaceService:PromptProductPurchase(player, RESTOCK_PRODUCT_ID)
+	if RunService:IsStudio() and requestRestockRemote then
+		requestRestockRemote:FireServer()
+	else
+		MarketplaceService:PromptProductPurchase(player, RESTOCK_PRODUCT_ID)
+	end
 end)
 
 Notification.TextTransparency = 1

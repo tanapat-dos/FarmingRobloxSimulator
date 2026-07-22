@@ -2,9 +2,10 @@
 	ECONOMY REBALANCE — paste into Studio Command Bar (View → Command Bar) and press Enter.
 
 	Applies seed prices / sell values / growth times from ReplicatedStorage.Modules.EconomyBalance
-	to every SeedData folder. Save the place after running.
+	to every SeedData folder. **Gameplay grow timers use SeedData.GrowthTime IntValues**, not
+	EconomyBalance alone — run this after changing growth times in Rojo.
 
-	Requires EconomyBalance ModuleScript in ReplicatedStorage.Modules (sync via Rojo).
+	Save the place after running.
 ]]
 
 local EconomyBalance = require(game.ReplicatedStorage.Modules.EconomyBalance)
@@ -41,6 +42,15 @@ for seedName, cfg in pairs(EconomyBalance.CROPS) do
 		setValue(folder, "BaseValue", cfg.baseValue)
 		setValue(folder, "GrowthTime", cfg.growthTime)
 		setValue(folder, "Rarity", cfg.rarity)
+		if cfg.multiHarvest ~= nil then
+			setValue(folder, "MultiHarvest", cfg.multiHarvest)
+		end
+		if cfg.harvestCount ~= nil then
+			setValue(folder, "HarvestCount", cfg.harvestCount)
+		end
+		if cfg.harvestInterval ~= nil then
+			setValue(folder, "HarvestInterval", cfg.harvestInterval)
+		end
 		updated += 1
 		print(string.format(
 			"[RebalanceEconomy] %s → $%d seed, base $%d, %ds, %s",

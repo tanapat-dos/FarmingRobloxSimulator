@@ -18,19 +18,19 @@ WeatherSounds.AMBIENT = {
 	},
 	Rain = {
 		SoundId = "rbxassetid://1516791621",
-		Volume = 0.38,
+		Volume = 0.18,
 		Looped = true,
 	},
 	Thunderstorm = {
 		SoundId = "rbxassetid://82247046952844",
-		Volume = 0.48,
+		Volume = 0.22,
 		Looped = true,
 	},
 }
 
 WeatherSounds.THUNDER_CRACK = {
 	SoundId = "rbxassetid://82247046952844",
-	Volume = 0.7,
+	Volume = 0.32,
 	Looped = false,
 }
 

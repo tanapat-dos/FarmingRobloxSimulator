@@ -87,6 +87,16 @@ If a Studio script fails to load, **replace the entire script** from Rojo — do
 
 Root cause → explain why → fix → check side effects. No temporary hacks.
 
+## Studio Command Bar tools (`tools/*.lua`)
+
+Integration scripts run in Studio against **friend art in Workspace**. Treat them as **non-destructive by default**:
+
+- **Never `Destroy()`** user Workspace display models, imported art, or anything not created in the same script run.
+- Prefer **reparent**, **rename**, **clone**, and **merge**; move replaced instances to a `_backup` parent or `nil` parent instead of deleting.
+- Only remove instances the script **just created** in that run (empty temp models, prior generated `ClientModel` under `Assets.Plants`, etc.).
+- No “replace container” patterns that delete an existing named model and insert an empty one.
+- If cleanup is unavoidable, require **explicit selection** or print a clear warning first.
+
 ## Priority
 
 Correctness > Maintainability > Performance > Security > Scalability > speed.

@@ -101,6 +101,10 @@
 
         "AchievementService": {
           "$path": "src/server/Services/AchievementService.lua"
+        },
+
+        "FishingService": {
+          "$path": "src/server/Services/FishingService.lua"
         }
       }
     },
@@ -118,6 +122,10 @@
         "ProximityPrompts": {
           "$path": "src/client/ProximityPrompts.client.lua",
           "$ignoreUnknownInstances": true
+        },
+
+        "FruitAimHarvest": {
+          "$path": "src/client/FruitAimHarvest.client.lua"
         },
 
         "NPCHandler": {
@@ -215,6 +223,10 @@
           "$path": "src/client/AchievementClient.client.lua"
         },
 
+        "FishingClient": {
+          "$path": "src/client/FishingClient.client.lua"
+        },
+
         "Toasts": {
           "$path": "src/client/Toasts.client.lua"
         }
@@ -258,6 +270,10 @@
 
         "PlantKeyUtil": {
           "$path": "src/shared/Modules/PlantKeyUtil.lua"
+        },
+
+        "PlantVisualScale": {
+          "$path": "src/shared/Modules/PlantVisualScale.lua"
         },
 
         "FruitDisplayName": {
@@ -304,12 +320,28 @@
           "$path": "src/shared/Modules/AchievementConfig.lua"
         },
 
+        "FishingConfig": {
+          "$path": "src/shared/Modules/FishingConfig.lua"
+        },
+
+        "SeedToolVisual": {
+          "$path": "src/shared/Modules/SeedToolVisual.lua"
+        },
+
+        "FishingModelPreview": {
+          "$path": "src/shared/Modules/FishingModelPreview.lua"
+        },
+
         "NavigationHudState": {
           "$path": "src/shared/Modules/NavigationHudState.lua"
         },
 
         "WeatherSounds": {
           "$path": "src/shared/Modules/WeatherSounds.lua"
+        },
+
+        "FruitHarvestConfig": {
+          "$path": "src/shared/Modules/FruitHarvestConfig.lua"
         },
 
         "ClientEffects": {

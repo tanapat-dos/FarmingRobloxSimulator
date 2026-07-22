@@ -35,18 +35,10 @@ for _, pack in ipairs(Monetization.DiamondPacks) do
 	end
 end
 
--- Restock shop for a single player
-local function HandleDevProductRestock(player)
+-- Restock shop with a fresh RNG roll (same as the global timer restock).
+local function HandleDevProductRestock(_player)
 	local SeedShopService = cachedModules.Cache.SeedShopService
-	local stock = SeedShopService:GetCurrentStock()
-	if stock then
-		for _, crop in pairs(stock) do
-			if crop.IsInStock then
-				crop.StockAmount += math.random(3, 5)
-			end
-		end
-		RemoteEvents.ResetSeedShop:FireClient(player, stock)
-	end
+	SeedShopService:BroadcastRestock()
 end
 
 -- Process receipt function

@@ -17,40 +17,67 @@ local plantsFolder = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Plan
 local CROPS = {
 	"Carrot", "Wheat", "Beetroot", "Eggplant", "Potato", "Radish",
 	"Strawberry", "Corn", "Garlic", "Lettuce", "Pepper",
-	"Pumpkin", "Tomato", "Grape", "Pineapple",
+	"Pumpkin", "Tomato", "Grape", "Pineapple", "Bubble Rash", "Crystal Blooms", "Mango",
 }
+
+local function cropMeshPrefix(cropName: string): string
+	return "SM_" .. cropName:gsub(" ", "")
+end
 
 local LEGACY_ONLY = { "Cacao", "Blueberry" }
 
-local function findFinalMesh(cropName: string): MeshPart?
+local function findFinalMeshes(cropName: string): { MeshPart }
 	local meshName = "SM_" .. cropName
+	local prefix = cropMeshPrefix(cropName)
+
 	if farmCropsSource then
 		local stored = farmCropsSource:FindFirstChild(meshName)
 		if stored and stored:IsA("MeshPart") then
-			return stored
+			return { stored }
 		end
 	end
+
 	local workspaceMesh = workspace:FindFirstChild(meshName)
 	if workspaceMesh and workspaceMesh:IsA("MeshPart") then
-		return workspaceMesh
+		return { workspaceMesh }
 	end
 
 	local clientModel = plantsFolder:FindFirstChild(cropName)
 		and plantsFolder[cropName]:FindFirstChild("ClientModel")
-	if clientModel then
-		local mesh = clientModel:FindFirstChild("SM_" .. cropName)
-		if mesh and mesh:IsA("MeshPart") then
-			return mesh
+	if not clientModel then
+		return {}
+	end
+
+	local direct = clientModel:FindFirstChild(meshName)
+	if direct and direct:IsA("MeshPart") then
+		return { direct }
+	end
+
+	local finals: { MeshPart } = {}
+	for _, descendant in clientModel:GetDescendants() do
+		if descendant:IsA("MeshPart")
+			and string.find(descendant.Name, prefix .. "_", 1, true)
+			and not string.find(descendant.Name, "_Seed_", 1, true)
+			and not string.find(descendant.Name, "_Stage1_", 1, true)
+			and not string.find(descendant.Name, "_Stage2_", 1, true)
+			and not string.find(descendant.Name, "_Stage3_", 1, true)
+			and not string.find(descendant.Name, "_Stage4_", 1, true)
+		then
+			table.insert(finals, descendant)
 		end
 	end
 
-	return nil
+	return finals
 end
 
-local function createFruitTool(cropName: string, finalMesh: MeshPart)
+local function createFruitTool(cropName: string, finalMeshes: { MeshPart })
 	local existing = cropsFolder:FindFirstChild(cropName)
 	if existing then
 		existing:Destroy()
+	end
+
+	if #finalMeshes == 0 then
+		return
 	end
 
 	local tool = Instance.new("Tool")
@@ -58,7 +85,36 @@ local function createFruitTool(cropName: string, finalMesh: MeshPart)
 	tool.RequiresHandle = true
 	tool.CanBeDropped = true
 
-	local handle = finalMesh:Clone()
+	local handle: BasePart
+	if #finalMeshes == 1 then
+		handle = finalMeshes[1]:Clone()
+	else
+		local temp = Instance.new("Model")
+		for _, mesh in finalMeshes do
+			local clone = mesh:Clone()
+			clone.Parent = temp
+		end
+		local center = temp:GetBoundingBox().Position
+		temp:Destroy()
+
+		handle = finalMeshes[1]:Clone()
+		handle.CFrame = handle.CFrame - center
+
+		for index = 2, #finalMeshes do
+			local clone = finalMeshes[index]:Clone()
+			clone.Anchored = false
+			clone.CanCollide = false
+			clone.Massless = true
+			clone.CFrame = clone.CFrame - center
+			clone.Parent = tool
+
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = handle
+			weld.Part1 = clone
+			weld.Parent = handle
+		end
+	end
+
 	handle.Name = "Handle"
 	handle.Anchored = false
 	handle.CanCollide = false
@@ -83,13 +139,13 @@ end
 
 local ok = 0
 for _, cropName in ipairs(CROPS) do
-	local finalMesh = findFinalMesh(cropName)
-	if not finalMesh then
+	local finalMeshes = findFinalMeshes(cropName)
+	if #finalMeshes == 0 then
 		warn("[AddFruitTools] Missing final mesh for: " .. cropName)
 		continue
 	end
 
-	createFruitTool(cropName, finalMesh)
+	createFruitTool(cropName, finalMeshes)
 	ok += 1
 end
 

@@ -9,6 +9,7 @@ local modules = replicatedStorage:WaitForChild("Modules")
 
 local seedDataModule = require(modules.SeedData)
 local plantKeyUtil = require(modules.PlantKeyUtil)
+local PlantVisualScale = require(modules.PlantVisualScale)
 local EconomyBalance = require(modules.EconomyBalance)
 
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
@@ -91,6 +92,50 @@ function Service.getPlot(player:Player)
 	return nil
 end
 
+local GARDEN_SPAWN_Y_OFFSET = 3
+
+function Service.getGardenSpawnCFrame(player: Player): CFrame?
+	local plot = Service.getPlot(player)
+	if not plot then
+		return nil
+	end
+	local tpPart = plot:FindFirstChild("TPPart")
+	if not tpPart or not tpPart:IsA("BasePart") then
+		return nil
+	end
+	return CFrame.new(tpPart.Position + Vector3.new(0, GARDEN_SPAWN_Y_OFFSET, 0))
+end
+
+function Service.teleportToGarden(player: Player, character: Model?)
+	local spawnCFrame = Service.getGardenSpawnCFrame(player)
+	if not spawnCFrame then
+		return
+	end
+
+	local char = character or player.Character
+	if not char then
+		return
+	end
+
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if hrp and hrp:IsA("BasePart") then
+		hrp.CFrame = spawnCFrame
+	end
+end
+
+local function ensureGardenSpawnOnCharacter(player: Player)
+	if player:GetAttribute("GardenSpawnHooked") == true then
+		return
+	end
+	player:SetAttribute("GardenSpawnHooked", true)
+
+	player.CharacterAdded:Connect(function(character)
+		task.defer(function()
+			Service.teleportToGarden(player, character)
+		end)
+	end)
+end
+
 function Service.getAvailablePlot(player:Player)
 	for i = 1, Service.getMaxPlots() do
 		local correspondingPlot: Model = workspace.Plots[tostring(i)]
@@ -106,6 +151,29 @@ function Service.getHarvestPromptDistance(plantSize: number): number
 	return math.clamp(14 + (size - 1) * 12, 18, 50)
 end
 
+local FruitHarvestConfig = require(modules:WaitForChild("FruitHarvestConfig"))
+
+function Service.configureMultiHarvestPrompt(harvestPrompt: ProximityPrompt)
+	harvestPrompt.RequiresLineOfSight = false
+	-- No default ProximityPrompt bubble (harvest via FruitAimHarvest: mouse + E). Server range uses FruitHarvestConfig.
+	harvestPrompt.MaxActivationDistance = 0
+	harvestPrompt.KeyboardKeyCode = Enum.KeyCode.E
+	harvestPrompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+end
+
+function Service.patchFruitHarvestPromptsOnPlant(serverModel: Model)
+	local fruitPrompts = serverModel:FindFirstChild("FruitPrompts")
+	if not fruitPrompts then
+		return
+	end
+	for _, part in fruitPrompts:GetChildren() do
+		local harvestPrompt = part:FindFirstChild("HarvestPrompt")
+		if harvestPrompt and harvestPrompt:IsA("ProximityPrompt") then
+			Service.configureMultiHarvestPrompt(harvestPrompt)
+		end
+	end
+end
+
 function Service.alignHarvestAnchor(serverModel: Model, cropName: string, plantSize: number)
 	local anchor = serverModel:FindFirstChild("HarvestAnchor")
 	local plantFolder = assets.Plants:FindFirstChild(cropName)
@@ -119,8 +187,8 @@ function Service.alignHarvestAnchor(serverModel: Model, cropName: string, plantS
 	end
 
 	local scale = plantSize or 1
-	local finalMesh = clientModel:FindFirstChild("SM_" .. cropName)
-	if finalMesh and finalMesh:IsA("BasePart") then
+	local finalMesh = PlantVisualScale.findFinalMesh(clientModel, cropName)
+	if finalMesh then
 		local anchorY = (finalMesh.Position.Y + finalMesh.Size.Y * 0.35) * scale
 		anchor.CFrame = CFrame.new(0, anchorY, 0)
 		return
@@ -345,9 +413,11 @@ function Service.createServerModel(player: Player, key: string, data: any)
 		serverModel:SetAttribute("Owner", player.UserId)
 		serverModel:SetAttribute("Plot", Service.getPlot(player).Name)
 
+		local worldScale = PlantVisualScale.getWorldScale(trueName, data.PlantSize)
+
 		-- Scaling
-		serverModel:ScaleTo(data.PlantSize)
-		Service.alignHarvestAnchor(serverModel, trueName, data.PlantSize)
+		serverModel:ScaleTo(worldScale)
+		Service.alignHarvestAnchor(serverModel, trueName, worldScale)
 
 		local serverConfig = script.ServerModelConfig:Clone()
 		serverConfig.Name = "ServerConfiguration"
@@ -399,6 +469,7 @@ function Service.createServerModel(player: Player, key: string, data: any)
 						harvestPrompt.HoldDuration = 0
 						harvestPrompt.Enabled = false
 						harvestPrompt.Parent = correspondingPart
+						Service.configureMultiHarvestPrompt(harvestPrompt)
 					end
 				end
 			end
@@ -410,7 +481,7 @@ function Service.createServerModel(player: Player, key: string, data: any)
 			harvestPrompt.HoldDuration = 0
 			harvestPrompt.Enabled = false
 			harvestPrompt.RequiresLineOfSight = false
-			harvestPrompt.MaxActivationDistance = Service.getHarvestPromptDistance(data.PlantSize)
+			harvestPrompt.MaxActivationDistance = Service.getHarvestPromptDistance(worldScale)
 			harvestPrompt.Parent = harvestHost
 		end
 
@@ -570,6 +641,13 @@ function Service.dataLoaded(player: Player)
 			for key: string, data: any in plotData do
 				Service.createServerModel(player, key, data)
 			end
+		end)
+	end
+
+	ensureGardenSpawnOnCharacter(player)
+	if player.Character then
+		task.defer(function()
+			Service.teleportToGarden(player, player.Character)
 		end)
 	end
 

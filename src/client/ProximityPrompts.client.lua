@@ -454,14 +454,11 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 		toggleAllPrompts(true)
 		local part = prompt.Parent
 		if part and part.Parent and part.Parent.Name == "FruitPrompts" then
-			local plantKey : string = part.Parent.Parent.Name
-			local fruitNumber = part.Name
-			
-			remotes.Harvest:FireServer(plantKey,fruitNumber)
-		else
-			local plantKey = part.Parent.Name
-			remotes.Harvest:FireServer(plantKey)
+			-- Multi-harvest: FruitAimHarvest.client.lua (mouse aim + E)
+			return
 		end
+		local plantKey = part.Parent.Name
+		remotes.Harvest:FireServer(plantKey)
 	end
 
 	-- Catch-all: any prompt not explicitly handled above (upgrade boards, legendary egg,

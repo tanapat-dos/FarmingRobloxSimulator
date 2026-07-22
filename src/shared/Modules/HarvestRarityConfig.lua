@@ -90,7 +90,7 @@ local HarvestRarityConfig = {
 	},
 }
 
--- Legacy-style mesh glow (Highlight fill + PointLight). No aura mesh/asset required.
+-- Mesh glow (Highlight + PointLight) plus RarityAuras sparkler in HarvestRarityEffects.
 HarvestRarityConfig.GLOW = {
 	Uncommon = { fillTransparency = 0.84, outlineTransparency = 0.45, brightness = 0.55, range = 5 },
 	Rare = { fillTransparency = 0.74, outlineTransparency = 0.3, brightness = 0.8, range = 6 },

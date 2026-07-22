@@ -14,16 +14,9 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local dailyRemote = remotes:WaitForChild("DailyLogin")
+local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
-local REWARDS = {
-	{ day = 1, cash = 500,   diamonds = 0  },
-	{ day = 2, cash = 1000,  diamonds = 0  },
-	{ day = 3, cash = 2000,  diamonds = 0  },
-	{ day = 4, cash = 3500,  diamonds = 0  },
-	{ day = 5, cash = 6000,  diamonds = 0  },
-	{ day = 6, cash = 10000, diamonds = 0  },
-	{ day = 7, cash = 20000, diamonds = 10 },
-}
+local REWARDS = EconomyBalance.DAILY_LOGIN_REWARDS
 
 local COLORS = {
 	panel = Color3.fromRGB(25, 28, 40),

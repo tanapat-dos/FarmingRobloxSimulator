@@ -28,9 +28,8 @@ local Service = {
 }
 
 function Service.getRandomPlantSize(name: string, extraData: any)
-	-- Was uniform 1-3: plots read as chaos with random giants everywhere.
-	-- Keep gentle variety; fruit size (below) carries the "giant crop" fantasy.
-	return Random.new():NextNumber(1, 1.75)
+	-- Gentle within-crop variety; PlantVisualScale normalizes mature height across crop types.
+	return Random.new():NextNumber(1, 1.35)
 end
 
 function Service.getRandomFruitSize(name: string, extraData: any)
@@ -235,6 +234,14 @@ local GUARANTEED_SEEDS = {
 	["Wheat Seed"] = true,
 }
 
+local function isAlwaysStockedSeed(seedName: string): boolean
+	if GUARANTEED_SEEDS[seedName] then
+		return true
+	end
+	local cropCfg = EconomyBalance.CROPS[seedName]
+	return cropCfg ~= nil and cropCfg.alwaysStocked == true
+end
+
 local function GenerateStock()
 	local candidates = {}
 
@@ -244,7 +251,7 @@ local function GenerateStock()
 			local rarity = seed:FindFirstChild("Rarity") and seed.Rarity.Value or "Common"
 			local price = seed:FindFirstChild("Price") and seed.Price.Value or 10
 			local baseValue = seed:FindFirstChild("BaseValue") and seed.BaseValue.Value or price
-			local available = GUARANTEED_SEEDS[seedName] or ShopStock.rollAppearance(rarity)
+			local available = isAlwaysStockedSeed(seedName) or ShopStock.rollAppearance(rarity)
 
 			if available then
 				local range = ShopStock.getStockRange(rarity, ShopStock.SEED_STOCK_RANGE)
@@ -321,6 +328,7 @@ function Service:BroadcastRestock()
 	local stock = GenerateStock()
 	if IS_STUDIO then
 		studioStock = stock
+		self.LastRestockTime = os.time()
 	else
 		self:SaveStockToMemoryStore(stock)
 		self:SaveRestockTime()
@@ -409,6 +417,35 @@ function Service.init()
 			Service:SaveStockToMemoryStore(stock)
 		end
 		Service.giveSeed(player, cropName, 1)
+	end)
+
+	local restockRemote = RemoteEvents:FindFirstChild("RequestSeedShopRestock")
+	if not restockRemote then
+		restockRemote = Instance.new("RemoteEvent")
+		restockRemote.Name = "RequestSeedShopRestock"
+		restockRemote.Parent = RemoteEvents
+	end
+
+	local restockDebounce: { [Player]: number } = {}
+	restockRemote.OnServerEvent:Connect(function(player)
+		if not IS_STUDIO then
+			return
+		end
+		if player:GetAttribute("DataLoaded") ~= true then
+			return
+		end
+
+		local now = os.clock()
+		if restockDebounce[player] and now - restockDebounce[player] < 2 then
+			return
+		end
+		restockDebounce[player] = now
+
+		Service:BroadcastRestock()
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		restockDebounce[player] = nil
 	end)
 end
 

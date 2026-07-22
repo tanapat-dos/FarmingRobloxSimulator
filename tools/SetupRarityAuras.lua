@@ -1,5 +1,5 @@
 -- Command bar: adds Rarity StringValue to PlotService FruitConfigTemplate if missing.
--- Harvest rarity glow is code-only (Highlight + PointLight) — no aura asset needed.
+-- Harvest rarity glow: Highlight + PointLight + ReplicatedStorage.Assets.RarityAuras.Generic sparkler.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -16,4 +16,4 @@ else
 	print("[SetupRarityAuras] FruitConfigTemplate.Rarity already exists")
 end
 
-print("[SetupRarityAuras] Harvest glow uses Highlight + PointLight (no aura mesh required)")
+print("[SetupRarityAuras] Ensure ReplicatedStorage.Assets.RarityAuras.Generic exists (Sparkles + Mist).")

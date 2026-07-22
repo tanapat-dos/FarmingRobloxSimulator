@@ -8,6 +8,7 @@ local modules = ReplicatedStorage.Modules
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 local seedDataModule = require(modules.SeedData)
 local plantKeyUtil = require(modules.PlantKeyUtil)
+local FruitHarvestConfig = require(modules:WaitForChild("FruitHarvestConfig"))
 
 local serverFolder = workspace.World.Map.PlantedSeeds.Server
 
@@ -26,6 +27,24 @@ function Service.isWithinHarvestBounds(character: Model, part: Instance, magnitu
 	return false
 end
 
+function Service.isWithinFruitHarvestRange(character: Model, fruitPart: BasePart, prompt: ProximityPrompt): boolean
+	local maxDistance = math.max(prompt.MaxActivationDistance, FruitHarvestConfig.MAX_DISTANCE)
+	if Service.isWithinHarvestBounds(character, fruitPart, maxDistance) then
+		return true
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return false
+	end
+
+	local delta = fruitPart.Position - rootPart.Position
+	local horizontal = Vector3.new(delta.X, 0, delta.Z).Magnitude
+	local vertical = math.abs(delta.Y)
+	return horizontal <= FruitHarvestConfig.MAX_HORIZONTAL
+		and vertical <= FruitHarvestConfig.MAX_VERTICAL
+end
+
 function Service.Harvest(ownerPlotData: any, player: Player, foundPlant: Model, fruitNumber: string, multiHarvest: boolean)
 	local inventoryService = cachedModules.Cache.InventoryService
 	
@@ -37,9 +56,10 @@ function Service.Harvest(ownerPlotData: any, player: Player, foundPlant: Model, 
 	if multiHarvest then
 	
 		
-		-- Harvest distance
-		local prompt: ProximityPrompt = foundPlant.FruitPrompts[fruitNumber].HarvestPrompt
-		if not Service.isWithinHarvestBounds(player.Character, foundPlant.FruitPrompts[fruitNumber],prompt.MaxActivationDistance) then
+		-- Harvest distance (tall tree fruits: stand near trunk, aim with mouse — see FruitAimHarvest)
+		local fruitPart = foundPlant.FruitPrompts[fruitNumber]
+		local prompt: ProximityPrompt = fruitPart.HarvestPrompt
+		if not Service.isWithinFruitHarvestRange(player.Character, fruitPart, prompt) then
 			return
 		end
 		
@@ -112,7 +132,16 @@ end
 
 function Service.init()
 	local dataService = cachedModules.Cache.DataService
-	
+	local plotService = cachedModules.Cache.PlotService
+
+	task.defer(function()
+		for _, plant in serverFolder:GetChildren() do
+			if plant:IsA("Model") and plotService and plotService.patchFruitHarvestPromptsOnPlant then
+				plotService.patchFruitHarvestPromptsOnPlant(plant)
+			end
+		end
+	end)
+
 	remotes.Harvest.OnServerEvent:Connect(function(player: Player, plantKey: string, fruitNumber: string)
 		local foundPlant = serverFolder:FindFirstChild(plantKey)
 		local seedData = seedDataModule.getData(plantKeyUtil.getSeedName(plantKey))

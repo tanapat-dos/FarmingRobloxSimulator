@@ -5,7 +5,18 @@
 
 local EconomyBalance = {}
 
-EconomyBalance.STARTING_CASH = 500
+EconomyBalance.STARTING_CASH = 100
+
+-- 7-day daily login streak (cash before rebirth/pet multipliers).
+EconomyBalance.DAILY_LOGIN_REWARDS = {
+	{ day = 1, cash = 50, diamonds = 0 },
+	{ day = 2, cash = 100, diamonds = 0 },
+	{ day = 3, cash = 200, diamonds = 0 },
+	{ day = 4, cash = 350, diamonds = 0 },
+	{ day = 5, cash = 600, diamonds = 0 },
+	{ day = 6, cash = 1000, diamonds = 0 },
+	{ day = 7, cash = 2000, diamonds = 10 },
+}
 
 -- Plot progression: every garden has 8 physical soil beds; bed 1 is free,
 -- beds 2..maxOwned are purchasable in order, the rest stay reserved.
@@ -17,6 +28,17 @@ EconomyBalance.PLOTS = {
 	cropsPerPlot = 10,
 	-- prices[n] = cost of the nth bed (index 1 is the free starter bed)
 	prices = { 0, 5000, 20000, 60000, 150000, 350000, 750000, 1500000 },
+}
+
+-- Mature crop height in the garden (studs at plantSize 1), after per-crop mesh normalization.
+EconomyBalance.PLANT_DISPLAY = {
+	targetMatureHeightStuds = 6.75,
+	minNormalizeFactor = 0.2,
+	maxNormalizeFactor = 3.5,
+	-- Fine-tune outliers (multiplies height normalize factor after clamp).
+	cropHeightMultiplier = {
+		Carrot = 0.78,
+	},
 }
 
 -- Garden upgrades purchased from the Upgrade Board (server authoritative).
@@ -161,21 +183,32 @@ EconomyBalance.EGGS = {
 -- BaseValue drives sell price via GetFruitValue (baseValue * weight^2 * mutations * rarity).
 -- Price and GrowthTime increase per tier; ROI improves slowly to reward progression.
 EconomyBalance.CROPS = {
-	["Carrot Seed"] = { price = 15, baseValue = 6, growthTime = 5, rarity = "Common" },
-	["Radish Seed"] = { price = 20, baseValue = 8, growthTime = 180, rarity = "Common" },
-	["Wheat Seed"] = { price = 25, baseValue = 10, growthTime = 240, rarity = "Common" },
-	["Lettuce Seed"] = { price = 30, baseValue = 12, growthTime = 270, rarity = "Common" },
-	["Potato Seed"] = { price = 35, baseValue = 14, growthTime = 300, rarity = "Common" },
-	["Beetroot Seed"] = { price = 40, baseValue = 16, growthTime = 330, rarity = "Common" },
-	["Tomato Seed"] = { price = 55, baseValue = 22, growthTime = 360, rarity = "Uncommon" },
-	["Garlic Seed"] = { price = 65, baseValue = 26, growthTime = 420, rarity = "Uncommon" },
-	["Corn Seed"] = { price = 80, baseValue = 32, growthTime = 480, rarity = "Uncommon" },
-	["Strawberry Seed"] = { price = 100, baseValue = 40, growthTime = 420, rarity = "Uncommon" },
-	["Pepper Seed"] = { price = 130, baseValue = 52, growthTime = 540, rarity = "Uncommon" },
-	["Pumpkin Seed"] = { price = 180, baseValue = 72, growthTime = 660, rarity = "Rare" },
-	["Grape Seed"] = { price = 250, baseValue = 100, growthTime = 780, rarity = "Rare" },
-	["Eggplant Seed"] = { price = 350, baseValue = 140, growthTime = 900, rarity = "Rare" },
-	["Pineapple Seed"] = { price = 500, baseValue = 200, growthTime = 1200, rarity = "Epic" },
+	["Carrot Seed"] = { price = 30, baseValue = 2, growthTime = 5, rarity = "Common" },
+	["Radish Seed"] = { price = 40, baseValue = 2, growthTime = 180, rarity = "Common" },
+	["Wheat Seed"] = { price = 50, baseValue = 2, growthTime = 240, rarity = "Common" },
+	["Lettuce Seed"] = { price = 60, baseValue = 3, growthTime = 270, rarity = "Common" },
+	["Potato Seed"] = { price = 70, baseValue = 3, growthTime = 300, rarity = "Common" },
+	["Beetroot Seed"] = { price = 80, baseValue = 3, growthTime = 330, rarity = "Common" },
+	["Tomato Seed"] = { price = 110, baseValue = 4, growthTime = 360, rarity = "Uncommon" },
+	["Garlic Seed"] = { price = 130, baseValue = 5, growthTime = 420, rarity = "Uncommon" },
+	["Corn Seed"] = { price = 160, baseValue = 6, growthTime = 480, rarity = "Uncommon" },
+	["Strawberry Seed"] = { price = 200, baseValue = 8, growthTime = 420, rarity = "Uncommon" },
+	["Pepper Seed"] = { price = 260, baseValue = 10, growthTime = 540, rarity = "Uncommon" },
+	["Pumpkin Seed"] = { price = 360, baseValue = 14, growthTime = 660, rarity = "Rare" },
+	["Grape Seed"] = { price = 500, baseValue = 20, growthTime = 780, rarity = "Rare" },
+	["Eggplant Seed"] = { price = 700, baseValue = 28, growthTime = 900, rarity = "Rare" },
+	["Pineapple Seed"] = { price = 1000, baseValue = 40, growthTime = 1200, rarity = "Epic" },
+	["Bubble Rash Seed"] = { price = 1200, baseValue = 48, growthTime = 1350, rarity = "Epic" },
+	["Crystal Blooms Seed"] = { price = 1300, baseValue = 50, growthTime = 1400, rarity = "Epic" },
+	["Mango Seed"] = {
+		price = 1600,
+		baseValue = 54,
+		growthTime = 1500,
+		rarity = "Epic",
+		multiHarvest = true,
+		harvestCount = 4,
+		harvestInterval = 600,
+	},
 }
 
 function EconomyBalance.pctToMultiplier(pct: number): number
