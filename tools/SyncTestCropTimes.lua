@@ -18,7 +18,7 @@ end
 
 local EconomyBalance = requireFresh(RS.Modules.EconomyBalance)
 
-local TEST_SEEDS = { "Crystal Blooms Seed", "Mango Seed" }
+local TEST_SEEDS = { "Crystal Blooms Seed", "Bubble Rash Seed", "Mango Seed" }
 
 local function setInt(folder: Instance, name: string, value: number)
 	local child = folder:FindFirstChild(name)

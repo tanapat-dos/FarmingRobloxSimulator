@@ -43,6 +43,19 @@ local cropSeeds = ServerStorage:WaitForChild("CropSeeds")
 local seedModels = ReplicatedStorage:WaitForChild("SeedModels")
 
 local EconomyBalance = require(ReplicatedStorage.Modules.EconomyBalance)
+
+local function requirePlantStageIntegrate()
+	local modScript = ReplicatedStorage.Modules:FindFirstChild("PlantStageIntegrate")
+	if not modScript or not modScript:IsA("ModuleScript") then
+		error(
+			"[BubbleRash] ReplicatedStorage.Modules.PlantStageIntegrate is missing. "
+				.. "Paste & run tools/PlantStageIntegrateInstall.lua in the Command Bar, then run this script again."
+		)
+	end
+	return require(modScript)
+end
+
+local PlantStageIntegrate = requirePlantStageIntegrate()
 local cropCfg = EconomyBalance.CROPS[SEED_NAME]
 if not cropCfg then
 	error("[BubbleRash] Missing EconomyBalance.CROPS entry: " .. SEED_NAME)
@@ -101,32 +114,8 @@ local function addInitialSprout(clientModel: Model, stage)
 	mesh.Parent = clientModel
 end
 
-local function getModelGroundOffset(sourceModel: Model): Vector3
-	local bbCF, bbSize = sourceModel:GetBoundingBox()
-	local groundY = bbCF.Position.Y - bbSize.Y / 2
-	return Vector3.new(bbCF.Position.X, groundY, bbCF.Position.Z)
-end
-
-local function addStageMeshes(clientModel: Model, sourceModel: Model, stage)
-	local groundOffset = getModelGroundOffset(sourceModel)
-
-	for _, mesh in sourceModel:GetDescendants() do
-		if mesh:IsA("MeshPart") then
-			local clone = mesh:Clone()
-			clone.Name = stage.meshTag .. "_" .. mesh.Name
-			-- Bottom of the source model sits at Y=0 in plant-local space.
-			clone.CFrame = mesh.CFrame - groundOffset
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CastShadow = false
-			clone:SetAttribute("AppearPercentage", stage.appear)
-			if stage.hideAt ~= nil then
-				clone:SetAttribute("HideAtPercentage", stage.hideAt)
-			end
-			clone.Parent = clientModel
-		end
-	end
-end
+local getModelGroundOffset = PlantStageIntegrate.getModelGroundOffset
+local harvestMeshIdSet = PlantStageIntegrate.harvestMeshIdSet
 
 local function createHarvestAnchor(serverModel: Model, clientModel: Model)
 	local old = serverModel:FindFirstChild("HarvestAnchor")
@@ -309,8 +298,14 @@ clientModel.Name = "ClientModel"
 clientModel.PrimaryPart = makePrimaryPart(clientModel)
 
 addInitialSprout(clientModel, STAGES[1])
-addStageMeshes(clientModel, middleModel, STAGES[2])
-addStageMeshes(clientModel, matureModel, STAGES[3])
+local harvestIds = harvestMeshIdSet(harvestModel)
+local addedMeshIds: { [string]: boolean } = {}
+local sproutRef = clientModel:FindFirstChild(STAGES[1].meshTag)
+if sproutRef and sproutRef:IsA("MeshPart") and sproutRef.MeshId ~= "" then
+	addedMeshIds[sproutRef.MeshId] = true
+end
+PlantStageIntegrate.addEarlyStageMeshes(clientModel, middleModel, STAGES[2], harvestIds, addedMeshIds)
+PlantStageIntegrate.addMatureStageMeshes(clientModel, matureModel, STAGES[3], harvestIds, addedMeshIds)
 clientModel.Parent = plantFolder
 
 local oldServer = plantFolder:FindFirstChild("ServerModel")

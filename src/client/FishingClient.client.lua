@@ -6,12 +6,12 @@
 ]]
 
 local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local FishingConfig = require(ReplicatedStorage:WaitForChild("Modules").FishingConfig)
+local FishingStandRegistry = require(ReplicatedStorage:WaitForChild("Modules").FishingStandRegistry)
 local FishingModelPreview = require(ReplicatedStorage:WaitForChild("Modules").FishingModelPreview)
 
 local player = Players.LocalPlayer
@@ -79,26 +79,11 @@ local function refreshLocalZone()
 		return
 	end
 
-	for _, part in CollectionService:GetTagged(FishingConfig.ZONE_TAG) do
-		if part:IsA("BasePart") then
-			local zoneId = part:GetAttribute("ZoneId")
-			if typeof(zoneId) == "string" then
-				local zone = FishingConfig.getZoneById(zoneId)
-				if zone and FishingConfig.isPlayerNearZone(root.Position, zone) then
-					inZone = true
-					zoneName = zone.displayName
-					return
-				end
-			end
-		end
-	end
-
-	for _, zone in FishingConfig.ZONES do
-		if FishingConfig.isPlayerNearZone(root.Position, zone) then
-			inZone = true
-			zoneName = zone.displayName
-			return
-		end
+	local zone = FishingConfig.resolveZoneAtPosition(root.Position, FishingStandRegistry.collectStandParts())
+	if zone then
+		inZone = true
+		zoneName = zone.displayName
+		return
 	end
 
 	inZone = false
@@ -458,4 +443,13 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 buildGui()
-fishingRemote:FireServer("refreshZone")
+
+task.spawn(function()
+	local deadline = os.clock() + 20
+	while workspace:GetAttribute("FishingStandsRegistered") ~= true and os.clock() < deadline do
+		task.wait(0.25)
+	end
+	refreshLocalZone()
+	updateHint()
+	fishingRemote:FireServer("refreshZone")
+end)

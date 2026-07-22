@@ -10,6 +10,8 @@
 
 	Creates/updates ReplicatedStorage + ServerStorage crop assets only.
 	Does not modify or delete Workspace display models.
+
+	If PlantStageIntegrate is missing, run tools/PlantStageIntegrateInstall.lua first.
 --]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,6 +40,19 @@ local cropSeeds = ServerStorage:WaitForChild("CropSeeds")
 local seedModels = ReplicatedStorage:WaitForChild("SeedModels")
 
 local EconomyBalance = require(ReplicatedStorage.Modules.EconomyBalance)
+
+local function requirePlantStageIntegrate()
+	local modScript = ReplicatedStorage.Modules:FindFirstChild("PlantStageIntegrate")
+	if not modScript or not modScript:IsA("ModuleScript") then
+		error(
+			"[CrystalBlooms] ReplicatedStorage.Modules.PlantStageIntegrate is missing. "
+				.. "Paste & run tools/PlantStageIntegrateInstall.lua in the Command Bar, then run this script again."
+		)
+	end
+	return require(modScript)
+end
+
+local PlantStageIntegrate = requirePlantStageIntegrate()
 local cropCfg = EconomyBalance.CROPS[SEED_NAME]
 if not cropCfg then
 	error("[CrystalBlooms] Missing EconomyBalance.CROPS entry: " .. SEED_NAME .. " (sync Rojo first)")
@@ -63,31 +78,7 @@ local function makePrimaryPart(parent: Model): Part
 	return p
 end
 
-local function getModelGroundOffset(sourceModel: Model): Vector3
-	local bbCF, bbSize = sourceModel:GetBoundingBox()
-	local groundY = bbCF.Position.Y - bbSize.Y / 2
-	return Vector3.new(bbCF.Position.X, groundY, bbCF.Position.Z)
-end
-
-local function addStageMeshes(clientModel: Model, sourceModel: Model, stage)
-	local groundOffset = getModelGroundOffset(sourceModel)
-
-	for _, mesh in sourceModel:GetDescendants() do
-		if mesh:IsA("MeshPart") then
-			local clone = mesh:Clone()
-			clone.Name = stage.meshTag .. "_" .. mesh.Name
-			clone.CFrame = mesh.CFrame - groundOffset
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CastShadow = false
-			clone:SetAttribute("AppearPercentage", stage.appear)
-			if stage.hideAt ~= nil then
-				clone:SetAttribute("HideAtPercentage", stage.hideAt)
-			end
-			clone.Parent = clientModel
-		end
-	end
-end
+local getModelGroundOffset = PlantStageIntegrate.getModelGroundOffset
 
 local function createHarvestAnchor(serverModel: Model, clientModel: Model)
 	local old = serverModel:FindFirstChild("HarvestAnchor")
@@ -290,9 +281,14 @@ local clientModel = Instance.new("Model")
 clientModel.Name = "ClientModel"
 clientModel.PrimaryPart = makePrimaryPart(clientModel)
 
-addStageMeshes(clientModel, sproutModel, STAGES[1])
-addStageMeshes(clientModel, growingModel, STAGES[2])
-addStageMeshes(clientModel, matureModel, STAGES[3])
+PlantStageIntegrate.addThreeGrowthStages(
+	clientModel,
+	sproutModel,
+	growingModel,
+	matureModel,
+	harvestModel,
+	STAGES
+)
 clientModel.Parent = plantFolder
 
 local oldServer = plantFolder:FindFirstChild("ServerModel")

@@ -111,6 +111,9 @@
 
     "StarterPlayer": {
       "$ignoreUnknownInstances": true,
+      "$properties": {
+        "BackpackEnabled": true
+      },
 
       "StarterPlayerScripts": {
         "$ignoreUnknownInstances": true,
@@ -219,6 +222,10 @@
           "$path": "src/client/MenuBarClient.client.lua"
         },
 
+        "EnableBackpackCoreGui": {
+          "$path": "src/client/EnableBackpackCoreGui.client.lua"
+        },
+
         "AchievementClient": {
           "$path": "src/client/AchievementClient.client.lua"
         },
@@ -276,6 +283,14 @@
           "$path": "src/shared/Modules/PlantVisualScale.lua"
         },
 
+        "PlantStageIntegrate": {
+          "$path": "src/shared/Modules/PlantStageIntegrate.lua"
+        },
+
+        "BackpackPanelUi": {
+          "$path": "src/shared/Modules/BackpackPanelUi.lua"
+        },
+
         "FruitDisplayName": {
           "$path": "src/shared/Modules/FruitDisplayName.lua"
         },
@@ -324,6 +339,10 @@
           "$path": "src/shared/Modules/FishingConfig.lua"
         },
 
+        "FishingStandRegistry": {
+          "$path": "src/shared/Modules/FishingStandRegistry.lua"
+        },
+
         "SeedToolVisual": {
           "$path": "src/shared/Modules/SeedToolVisual.lua"
         },
@@ -338,6 +357,10 @@
 
         "WeatherSounds": {
           "$path": "src/shared/Modules/WeatherSounds.lua"
+        },
+
+        "WeatherHudConfig": {
+          "$path": "src/shared/Modules/WeatherHudConfig.lua"
         },
 
         "FruitHarvestConfig": {

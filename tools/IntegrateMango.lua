@@ -69,6 +69,19 @@ local function requireEconomyBalanceFresh()
 end
 
 local EconomyBalance = requireEconomyBalanceFresh()
+
+local function requirePlantStageIntegrate()
+	local modScript = ReplicatedStorage.Modules:FindFirstChild("PlantStageIntegrate")
+	if not modScript or not modScript:IsA("ModuleScript") then
+		error(
+			"[Mango] ReplicatedStorage.Modules.PlantStageIntegrate is missing. "
+				.. "Paste & run tools/PlantStageIntegrateInstall.lua in the Command Bar, then run this script again."
+		)
+	end
+	return require(modScript)
+end
+
+local PlantStageIntegrate = requirePlantStageIntegrate()
 local cropCfg = EconomyBalance.CROPS[SEED_NAME]
 
 local maxFruits = cropCfg.harvestCount or 4
@@ -105,25 +118,6 @@ local function getModelGroundOffset(sourceModel: Model): Vector3
 	return Vector3.new(bbCF.Position.X, groundY, bbCF.Position.Z)
 end
 
-local function addStageMeshes(clientModel: Model, sourceModel: Model, stage)
-	local groundOffset = getModelGroundOffset(sourceModel)
-	for _, mesh in sourceModel:GetDescendants() do
-		if mesh:IsA("MeshPart") then
-			local clone = mesh:Clone()
-			clone.Name = stage.meshTag .. "_" .. mesh.Name
-			clone.CFrame = mesh.CFrame - groundOffset
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CastShadow = false
-			clone:SetAttribute("AppearPercentage", stage.appear)
-			if stage.hideAt ~= nil then
-				clone:SetAttribute("HideAtPercentage", stage.hideAt)
-			end
-			clone.Parent = clientModel
-		end
-	end
-end
-
 -- Mature display: tree only in the growth stage. Fruits come from fruit_1..N when harvestable (no duplicate).
 local function shouldExcludeMatureStageMesh(
 	mesh: MeshPart,
@@ -139,33 +133,6 @@ local function shouldExcludeMatureStageMesh(
 		return true
 	end
 	return false
-end
-
-local function addMatureTreeStageMeshes(
-	clientModel: Model,
-	matureModel: Model,
-	stage,
-	fruitEntries: { FruitEntry },
-	harvestModel: Model
-)
-	local groundOffset = getModelGroundOffset(matureModel)
-	local harvestIds = harvestMeshIdSet(harvestModel)
-	for _, mesh in matureModel:GetDescendants() do
-		if mesh:IsA("MeshPart") and not shouldExcludeMatureStageMesh(mesh, fruitEntries, harvestIds) then
-			local clone = mesh:Clone()
-			clone.Name = stage.meshTag .. "_" .. mesh.Name
-			clone.CFrame = mesh.CFrame - groundOffset
-			clone.Anchored = true
-			clone.CanCollide = false
-			clone.CastShadow = false
-			clone:SetAttribute("AppearPercentage", stage.appear)
-			if stage.hideAt ~= nil then
-				clone:SetAttribute("HideAtPercentage", stage.hideAt)
-			end
-			clone:SetAttribute("MangoTreeStage", true)
-			clone.Parent = clientModel
-		end
-	end
 end
 
 local function harvestMeshIdSet(harvestModel: Model): { [string]: boolean }
@@ -523,9 +490,23 @@ end
 local clientModel = Instance.new("Model")
 clientModel.Name = "ClientModel"
 clientModel.PrimaryPart = makePrimaryPart(clientModel)
-addStageMeshes(clientModel, sproutModel, STAGES[1])
-addStageMeshes(clientModel, growingModel, STAGES[2])
-addMatureTreeStageMeshes(clientModel, matureModel, STAGES[3], fruitEntries, harvestModel)
+
+local harvestIds = harvestMeshIdSet(harvestModel)
+local addedMeshIds: { [string]: boolean } = {}
+local function excludeFruitOrHarvest(mesh: MeshPart): boolean
+	return shouldExcludeMatureStageMesh(mesh, fruitEntries, harvestIds)
+end
+
+PlantStageIntegrate.addEarlyStageMeshes(clientModel, sproutModel, STAGES[1], harvestIds, addedMeshIds, excludeFruitOrHarvest)
+PlantStageIntegrate.addEarlyStageMeshes(clientModel, growingModel, STAGES[2], harvestIds, addedMeshIds, excludeFruitOrHarvest)
+PlantStageIntegrate.addMatureStageMeshes(
+	clientModel,
+	matureModel,
+	STAGES[3],
+	harvestIds,
+	addedMeshIds,
+	excludeFruitOrHarvest
+)
 
 for _, entry in fruitEntries do
 	buildFruitTemplate(entry.index, harvestModel, entry.fruitModel).Parent = clientModel

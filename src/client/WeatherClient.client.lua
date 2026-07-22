@@ -1,5 +1,5 @@
 --[[
-	WeatherClient — visuals + HUD for WeatherService.
+	WeatherClient — rain/lightning visuals + ambient audio (banner lives in DayNightHUD stack).
 
 	Rain is created on the CLIENT only (Workspace.WeatherEffects will not
 	appear in Studio Explorer while viewing the Server — switch Explorer to
@@ -19,15 +19,17 @@ local playerGui = player:WaitForChild("PlayerGui")
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local soundsFolder = ReplicatedStorage:FindFirstChild("Sounds")
 
-local HUD_TEXT = {
-	Sunny = "☀️ Sunny — clear skies",
-	Rain = "🌧 Rain — crops can turn <b>Wet</b> (x2 value)!",
-	Thunderstorm = "⛈ Thunderstorm — <b>Wet</b> x2 and rare <b>Shocked</b> x8!",
-}
-
-local HUD_RIGHT_INSET = 12
-local HUD_TOP_INSET = 8
-local HUD_BANNER_HEIGHT = 30
+local function fireWeatherHudUpdate(weatherName: string)
+	local signals = ReplicatedStorage:FindFirstChild("ClientSignals")
+	local event = signals and signals:FindFirstChild("WeatherHudUpdate")
+	if event and event:IsA("BindableEvent") then
+		event:Fire(weatherName)
+	end
+	local legacy = playerGui:FindFirstChild("WeatherHUD")
+	if legacy then
+		legacy:Destroy()
+	end
+end
 
 -- ----------------------------------------------------------- ambient audio
 local ambientFolder: Folder? = nil
@@ -276,57 +278,6 @@ local function startFlashes()
 	end)
 end
 
--- ------------------------------------------------------------------ HUD
-local weatherGui: ScreenGui? = nil
-local hudLabel: TextLabel? = nil
-
-local function ensureHud(): TextLabel
-	if hudLabel and hudLabel.Parent then
-		return hudLabel
-	end
-
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "WeatherHUD"
-	gui.ResetOnSpawn = false
-	gui.DisplayOrder = 5
-	gui.Parent = playerGui
-	weatherGui = gui
-
-	local label = Instance.new("TextLabel")
-	label.Name = "Banner"
-	label.AnchorPoint = Vector2.new(1, 0)
-	label.Position = UDim2.new(1, -HUD_RIGHT_INSET, 0, HUD_TOP_INSET)
-	label.Size = UDim2.fromOffset(340, HUD_BANNER_HEIGHT)
-	label.BackgroundColor3 = Color3.fromRGB(25, 28, 36)
-	label.BackgroundTransparency = 0.25
-	label.TextColor3 = Color3.fromRGB(235, 240, 250)
-	label.TextStrokeTransparency = 0.6
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 16
-	label.RichText = true
-	label.TextXAlignment = Enum.TextXAlignment.Center
-	label.Visible = false
-	label.Parent = gui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = label
-
-	hudLabel = label
-	return label
-end
-
-local function setHud(weatherName: string)
-	local label = ensureHud()
-	local text = HUD_TEXT[weatherName]
-	if text then
-		label.Text = text
-		label.Visible = true
-		return
-	end
-	label.Visible = false
-end
-
 -- ------------------------------------------------------------- apply state
 local function onWeatherChanged(weatherName: string)
 	stopFlashes()
@@ -342,7 +293,7 @@ local function onWeatherChanged(weatherName: string)
 	end
 
 	fadeAmbientTo(weatherName)
-	setHud(weatherName)
+	fireWeatherHudUpdate(weatherName)
 end
 
 remotes:WaitForChild("WeatherChanged").OnClientEvent:Connect(function(weatherName: string)

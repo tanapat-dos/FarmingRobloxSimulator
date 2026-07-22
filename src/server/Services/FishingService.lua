@@ -9,12 +9,12 @@
 	  4. Server validates each tap and awards cash for the pre-rolled fish on success.
 ]]
 
-local CollectionService = game:GetService("CollectionService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FishingConfig = require(ReplicatedStorage:WaitForChild("Modules").FishingConfig)
+local FishingStandRegistry = require(ReplicatedStorage:WaitForChild("Modules").FishingStandRegistry)
 
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
@@ -66,25 +66,8 @@ local function getRoot(player: Player): BasePart?
 end
 
 local function getZoneAtPosition(position: Vector3): FishingConfig.FishingZoneDef?
-	for _, part in CollectionService:GetTagged(FishingConfig.ZONE_TAG) do
-		if part:IsA("BasePart") then
-			local zoneId = part:GetAttribute("ZoneId")
-			if typeof(zoneId) == "string" then
-				local zone = FishingConfig.getZoneById(zoneId)
-				if zone and FishingConfig.isPlayerNearZone(position, zone) then
-					return zone
-				end
-			end
-		end
-	end
-
-	for _, zone in FishingConfig.ZONES do
-		if FishingConfig.isPlayerNearZone(position, zone) then
-			return zone
-		end
-	end
-
-	return nil
+	local stands = FishingStandRegistry.collectStandParts()
+	return FishingConfig.resolveZoneAtPosition(position, stands)
 end
 
 local function getPlayerZone(player: Player): FishingConfig.FishingZoneDef?
@@ -195,7 +178,7 @@ local function startCast(player: Player)
 
 	local zone = getPlayerZone(player)
 	if not zone then
-		notify(player, "Move closer to the canal to fish.", "error")
+		notify(player, "Stand on the bridge or a fishing rock to cast.", "error")
 		return
 	end
 
@@ -300,6 +283,8 @@ local function cancelCast(player: Player, sessionId: string)
 end
 
 function Service.init()
+	FishingStandRegistry.ensureRegistered()
+
 	fishingRemote.OnServerEvent:Connect(function(player: Player, action: string, payload: any)
 		if typeof(action) ~= "string" then
 			return

@@ -1,5 +1,5 @@
 --[[
-	DayNightService — server-authoritative 12-minute day/night clock.
+	DayNightService — server-authoritative day/night clock (longer day, shorter night).
 
 	Replicates GameClock (0–24) and DayPhase via workspace attributes so late
 	joiners continue from the live server time.

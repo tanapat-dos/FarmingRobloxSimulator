@@ -88,6 +88,14 @@ local function waitForHarvestVisual(clientModel: Model, serverModel: Model)
 	end
 end
 
+local function getFruitVisualScale(plantName: string, serverModel: Model, sizeScaling: number): number
+	local serverConfig = serverModel:FindFirstChild("ServerConfiguration")
+	local plantSizeValue = serverConfig and serverConfig:FindFirstChild("PlantSize")
+	local plantSize = if plantSizeValue and plantSizeValue:IsA("NumberValue") then plantSizeValue.Value else 1
+	local worldScale = PlantVisualScale.getWorldScale(plantName, plantSize)
+	return sizeScaling * worldScale * PlantVisualScale.getFruitDisplayScale(plantName)
+end
+
 local function harvestableChanged(plantName: string, serverModel:Model, clientModel: Model, fruitNumber: string, harvestable: boolean, multiHarvest: boolean, sizeScaling: number, seed_data: Folder)
 	task.spawn(function()
 		
@@ -101,7 +109,7 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 					if not clientModel:FindFirstChild("fruit_"..fruitNumber) then
 						local clone = assets.Plants[plantName].ClientModel["fruit_"..fruitNumber]:Clone()
 						clone:SetPrimaryPartCFrame(serverModel.FruitPrompts[fruitNumber].CFrame)
-						clone:ScaleTo(sizeScaling)
+						clone:ScaleTo(getFruitVisualScale(plantName, serverModel, sizeScaling))
 						clone.Parent = clientModel
 
 						-- Mutations.Changed is wired once per fruit in childAdded;
@@ -206,14 +214,15 @@ local function growthPercentageUpdated(clientModel: Model, newValue: number)
 			local hideAtPercentage = v:GetAttribute("HideAtPercentage")
 
 			task.spawn(function()
+				if not v:IsA("BasePart") then
+					return
+				end
 				if isTweened ~= nil and originalSize and appearPercentage ~= nil then
 					-- Stage-transition crops: hide this stage once the next one should appear
 					if hideAtPercentage and newValue >= hideAtPercentage then
-						if isTweened == true then
-							v.Transparency = 1
-							v.Size = Vector3.new(0.01, 0.01, 0.01)
-							v:SetAttribute("IsTweened", false)
-						end
+						v.Transparency = 1
+						v.Size = Vector3.new(0.01, 0.01, 0.01)
+						v:SetAttribute("IsTweened", false)
 					elseif isTweened == false then
 						if newValue >= appearPercentage then
 							v:SetAttribute("IsTweened", true)
@@ -377,17 +386,13 @@ local function childAdded(child: Instance)
 			
 			clientModel:SetAttribute("FullyGrown", false)
 			
-			for _,v in clientModel:GetDescendants() do
-				local s,e = pcall(function()
-					local t = v.Transparency
-				end)
-				
-				if s then
+			for _, v in clientModel:GetDescendants() do
+				if v:IsA("BasePart") and v:GetAttribute("AppearPercentage") ~= nil then
 					v.Transparency = 1
-					v:SetAttribute("OriginalSize",v.Size)
-					v:SetAttribute("OriginalCFrame",v.CFrame)
-					v:SetAttribute("IsTweened",false)
-					v.Size = Vector3.new(0.01,0.01,0.01)
+					v:SetAttribute("OriginalSize", v.Size)
+					v:SetAttribute("OriginalCFrame", v.CFrame)
+					v:SetAttribute("IsTweened", false)
+					v.Size = Vector3.new(0.01, 0.01, 0.01)
 					v.CFrame = clientModel:GetPivot()
 				end
 			end

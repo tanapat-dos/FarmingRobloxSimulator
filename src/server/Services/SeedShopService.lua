@@ -20,7 +20,19 @@ local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
 local stockMemoryKey = "GLOBAL_SHOP_STOCK"
 local timeMemoryKey = "GLOBAL_RESTOCK_TIME"
-local restockInterval = 300 -- 300
+local restockInterval = EconomyBalance.SEED_SHOP.restockIntervalSeconds
+
+local function ensureRemote(name: string): RemoteEvent
+	local remote = RemoteEvents:FindFirstChild(name)
+	if not remote then
+		remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = RemoteEvents
+	end
+	return remote :: RemoteEvent
+end
+
+local seedShopTimerRemote = ensureRemote("SeedShopTimer")
 
 local Service = {
 	RestockInterval = restockInterval,
@@ -35,6 +47,10 @@ end
 function Service.getRandomFruitSize(name: string, extraData: any)
 	if name == "Carrot Seed" then
 		return 1
+	end
+	if name == "Mango Seed" then
+		local r = Random.new():NextNumber(0, 1)
+		return 0.75 + (r ^ 2.2) * 1.1
 	end
 	-- Bias low so giant fruits (~2.5x+) are rare and exciting instead of
 	-- constant. This also feeds sell value (weight^2), so the squared curve
@@ -214,10 +230,14 @@ function Service.giveSeed(player:Player, seedName:string, amount:number)
 	inventoryService.inventoryUpdated(player, seedName)
 end
 
-local function FormatTime(seconds)
-	local minutes = math.floor(seconds / 60)
-	local remainder = seconds % 60
-	return string.format("%d:%02d", minutes, remainder)
+local function getRemainingSeconds(): number
+	local elapsed = os.time() - Service.LastRestockTime
+	return math.max(0, restockInterval - elapsed)
+end
+
+local function publishRestockTimer(remaining: number)
+	workspace:SetAttribute("SeedShopRestockRemaining", remaining)
+	seedShopTimerRemote:FireAllClients(remaining)
 end
 
 local seedStorage = ServerStorage:WaitForChild("CropSeeds")
@@ -357,6 +377,8 @@ function Service.init()
 	local inventoryService = cachedModules.Cache.InventoryService
 	local moneyService = cachedModules.Cache.MoneyService
 
+	workspace:SetAttribute("SeedShopRestockInterval", restockInterval)
+
 	if IS_STUDIO then
 		-- Generate stock immediately so players joining don't wait 5 minutes
 		task.defer(function()
@@ -375,9 +397,9 @@ function Service.init()
 
 	task.spawn(function()
 		while true do
-			local remaining = IS_STUDIO and restockInterval or Service:GetTimeUntilRestock()
+			local remaining = if IS_STUDIO then getRemainingSeconds() else Service:GetTimeUntilRestock()
 			while remaining > 0 do
-				RemoteEvents.SeedShopTimer:FireAllClients(FormatTime(remaining))
+				publishRestockTimer(remaining)
 				task.wait(1)
 				remaining -= 1
 			end
@@ -386,6 +408,10 @@ function Service.init()
 	end)
 
 	Players.PlayerAdded:Connect(function(player)
+		task.defer(function()
+			local remaining = if IS_STUDIO then getRemainingSeconds() else Service:GetTimeUntilRestock()
+			seedShopTimerRemote:FireClient(player, remaining)
+		end)
 		task.spawn(function()
 			local tries = IS_STUDIO and 30 or 10
 			for _ = 1, tries do

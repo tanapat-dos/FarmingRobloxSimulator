@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 
 local SeedRarityColors = require(ReplicatedStorage:WaitForChild("Modules").SeedRarity)
+local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -199,7 +200,11 @@ listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 RemoteEvents.SeedShopTimer.OnClientEvent:Connect(function(timeLeft)
-	timerLabel.Text = "New Eggs in: " .. tostring(timeLeft)
+	if typeof(timeLeft) == "number" then
+		timerLabel.Text = "New Eggs in: " .. ShopStock.formatCountdown(timeLeft)
+	else
+		timerLabel.Text = "New Eggs in: " .. tostring(timeLeft)
+	end
 end)
 
 Notification.TextTransparency = 1

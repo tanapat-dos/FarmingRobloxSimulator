@@ -87,4 +87,11 @@ function ShopStock.entriesToMap(entries)
 	return stockMap
 end
 
+function ShopStock.formatCountdown(seconds: number): string
+	local total = math.max(0, math.floor(seconds))
+	local minutes = math.floor(total / 60)
+	local remainder = total % 60
+	return string.format("%d:%02d", minutes, remainder)
+end
+
 return ShopStock

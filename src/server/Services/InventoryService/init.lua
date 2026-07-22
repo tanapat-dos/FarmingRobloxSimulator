@@ -13,13 +13,12 @@ local fruitNameParser = require(modules.FruitNameParse)
 local fruitDisplayName = require(modules.FruitDisplayName)
 local fruitInventoryFormat = require(modules.FruitInventoryFormat)
 local ToolData = require(modules.ToolData)
+local PlantVisualScale = require(modules.PlantVisualScale)
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
 local Service = {
 	mutationsEffectCache = {},
 }
-
-local FRUIT_TOOL_SCALE = 0.65
 
 for _, v in modules.Mutations:GetChildren() do
 	if v:IsA("ModuleScript") then
@@ -254,7 +253,7 @@ function Service.createNewTool(player: Player, toolName: string)
 			local foundTool = ReplicatedStorage.Assets.Crops:FindFirstChild(fruitName)
 			if foundTool then
 				local toolClone: Tool = foundTool:Clone()
-				local displayScale = weight * FRUIT_TOOL_SCALE
+				local displayScale = PlantVisualScale.getHeldToolScale(fruitName, weight)
 				toolClone.Name = fruitDisplayName.getHotbarName(itemData)
 				toolClone.ToolTip = fruitDisplayName.getToolTip(itemData)
 				toolClone:SetAttribute("DisplayName", itemData)

@@ -6,9 +6,8 @@
 	openers, keeping full parity with the old TeleportManager names so
 	NavigationHudState still hides/shows everything correctly.
 
-	Also adds a 💎 Diamond counter to the top-right HUD.
-
 	Buttons (top to bottom):
+	  🎒 Bag         — open backpack tool list (or press B)
 	  🌱 Garden      — teleport to own plot
 	  🌾 Seeds       — teleport to seed shop
 	  💰 Sell        — teleport to sell shop
@@ -23,11 +22,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local player = Players.LocalPlayer
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local playerGui = player:WaitForChild("PlayerGui")
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 
 local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
+local BackpackPanelUi = require(ReplicatedStorage:WaitForChild("Modules").BackpackPanelUi)
 
 local COLORS = {
 	bar         = Color3.fromRGB(18, 20, 30),
@@ -51,6 +51,8 @@ local CORNER_R   = 14
 
 -- Button definitions in order
 local BUTTONS = {
+	{ name = "BackpackBtn",       icon = "🎒", label = "Bag",      color = Color3.fromRGB(140, 200, 255), panel = "Backpack" },
+	{ name = "_sepTop" },
 	{ name = "GardenTeleport",    icon = "🌱", label = "Garden",   color = COLORS.accent },
 	{ name = "SeedsTeleport",     icon = "🌾", label = "Seeds",    color = Color3.fromRGB(200, 220, 100) },
 	{ name = "SellTeleport",      icon = "💰", label = "Sell",     color = COLORS.gold },
@@ -117,7 +119,7 @@ local function makeBar()
 	barPad.Parent = bar
 
 	for i, def in ipairs(BUTTONS) do
-		if def.name == "_sep" then
+		if def.name == "_sep" or def.name == "_sepTop" then
 			local sep = Instance.new("Frame")
 			sep.LayoutOrder = i
 			sep.Size = UDim2.new(1, -8, 0, 1)
@@ -216,6 +218,8 @@ local function makeBar()
 				hrp.CFrame = CFrame.new(workspace.Shops.SellStuff.TPPart.Position + Vector3.new(0, 3, 0))
 			elseif def.name == "PetsTeleport" and hrp then
 				hrp.CFrame = CFrame.new(workspace.Shops.PetShop.TPPart.Position + Vector3.new(0, 3, 0))
+			elseif def.panel == "Backpack" then
+				BackpackPanelUi.toggle()
 			elseif def.panel == "PetMenu" then
 				local petMenu = remotes:FindFirstChild("PetMenu")
 				if petMenu then
@@ -262,48 +266,6 @@ local function makeBar()
 	task.wait(0.3)
 	TweenService:Create(bar, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{ Position = UDim2.new(0, 12, 0.5, 0) }):Play()
-end
-
--- ------------------------------------------------------------------ diamond HUD
-local function makeDiamondHud()
-	local main = playerGui:WaitForChild("Main", 15)
-	if not main then
-		return
-	end
-
-	local diamondLabel = Instance.new("TextLabel")
-	diamondLabel.Name = "DiamondCount"
-	diamondLabel.AnchorPoint = Vector2.new(1, 0)
-	diamondLabel.Position = UDim2.new(1, -12, 0, 8)
-	diamondLabel.Size = UDim2.fromOffset(130, 34)
-	diamondLabel.BackgroundColor3 = Color3.fromRGB(22, 24, 38)
-	diamondLabel.BackgroundTransparency = 0.1
-	diamondLabel.Text = "💎 0"
-	diamondLabel.TextColor3 = COLORS.diamond
-	diamondLabel.Font = Enum.Font.GothamBold
-	diamondLabel.TextSize = 18
-	diamondLabel.RichText = false
-	diamondLabel.Parent = main
-
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 10)
-	c.Parent = diamondLabel
-	local s = Instance.new("UIStroke")
-	s.Color = Color3.fromRGB(80, 150, 200)
-	s.Thickness = 1.5
-	s.Transparency = 0.4
-	s.Parent = diamondLabel
-
-	local function refresh()
-		local amount = player:GetAttribute("Diamonds") or 0
-		local text = tostring(math.floor(amount))
-		local formatted = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-		formatted = formatted:gsub("^,", "")
-		diamondLabel.Text = "💎 " .. formatted
-	end
-
-	refresh()
-	player:GetAttributeChangedSignal("Diamonds"):Connect(refresh)
 end
 
 -- ------------------------------------------------------------------ visibility sync
@@ -355,5 +317,6 @@ end
 -- ------------------------------------------------------------------ init
 NavigationHudState.onChanged(applyVisibility)
 
+BackpackPanelUi.mount(player)
+
 task.spawn(makeBar)
-task.spawn(makeDiamondHud)

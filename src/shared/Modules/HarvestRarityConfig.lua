@@ -90,14 +90,25 @@ local HarvestRarityConfig = {
 	},
 }
 
--- Mesh glow (Highlight + PointLight) plus RarityAuras sparkler in HarvestRarityEffects.
+-- PointLight + RarityAuras sparkler (+ mesh sheen). No Highlight outline.
+-- Common = no overlay. Higher tiers = stronger light + particles + reflectance.
 HarvestRarityConfig.GLOW = {
-	Uncommon = { fillTransparency = 0.84, outlineTransparency = 0.45, brightness = 0.55, range = 5 },
-	Rare = { fillTransparency = 0.74, outlineTransparency = 0.3, brightness = 0.8, range = 6 },
-	Epic = { fillTransparency = 0.64, outlineTransparency = 0.2, brightness = 1, range = 7 },
-	Legendary = { fillTransparency = 0.54, outlineTransparency = 0.12, brightness = 1.15, range = 8 },
-	Mythical = { fillTransparency = 0.44, outlineTransparency = 0.08, brightness = 1.3, range = 9 },
-	Divine = { fillTransparency = 0.34, outlineTransparency = 0.04, brightness = 1.45, range = 10 },
+	Uncommon = { brightness = 0.3, range = 3.5, sparklerScale = 0.4 },
+	Rare = { brightness = 0.55, range = 5, sparklerScale = 0.7 },
+	Epic = { brightness = 0.85, range = 6.5, sparklerScale = 1.05 },
+	Legendary = { brightness = 1.05, range = 8, sparklerScale = 1.35 },
+	Mythical = { brightness = 1.25, range = 9.5, sparklerScale = 1.65, pulse = true },
+	Divine = { brightness = 1.45, range = 11, sparklerScale = 2, pulse = true },
+}
+
+-- Subtle “premium” read on the mesh itself (no SurfaceAppearance required).
+HarvestRarityConfig.MESH = {
+	Uncommon = { reflectance = 0.06, colorTint = 0.06 },
+	Rare = { reflectance = 0.12, colorTint = 0.1 },
+	Epic = { reflectance = 0.2, colorTint = 0.16 },
+	Legendary = { reflectance = 0.28, colorTint = 0.22 },
+	Mythical = { reflectance = 0.36, colorTint = 0.28 },
+	Divine = { reflectance = 0.45, colorTint = 0.34 },
 }
 
 function HarvestRarityConfig.isTier(name: string): boolean
@@ -110,6 +121,10 @@ end
 
 function HarvestRarityConfig.getGlowSettings(rarity: string)
 	return HarvestRarityConfig.GLOW[rarity]
+end
+
+function HarvestRarityConfig.getMeshSettings(rarity: string)
+	return HarvestRarityConfig.MESH[rarity]
 end
 
 return HarvestRarityConfig

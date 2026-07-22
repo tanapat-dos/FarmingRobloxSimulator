@@ -19,7 +19,15 @@ export type WeatherAdjust = {
 
 local DayNightConfig = {}
 
-DayNightConfig.DAY_LENGTH_SECONDS = 12 * 60
+-- Real-time spent on each portion of the 24h lighting loop (daylight vs everything else).
+DayNightConfig.DAY_REAL_SECONDS = 9 * 60
+DayNightConfig.NIGHT_REAL_SECONDS = 3 * 60
+-- Full cycle length (also replicated on workspace as DayLengthSeconds).
+DayNightConfig.DAY_LENGTH_SECONDS = DayNightConfig.DAY_REAL_SECONDS + DayNightConfig.NIGHT_REAL_SECONDS
+-- In-game hours treated as "lit day" vs "night" for clock speed (matches keyframe sunrise/sunset).
+DayNightConfig.DAYLIGHT_CLOCK_START = 6.5
+DayNightConfig.DAYLIGHT_CLOCK_END = 19.5
+
 DayNightConfig.START_CLOCK = 8 -- server boots at 8:00 AM
 
 -- Sample points across the 24h cycle (ClockTime matches GameClock).
@@ -149,11 +157,13 @@ end
 
 function DayNightConfig.getPhase(clock: number): string
 	local hour = clock % 24
-	if hour >= 5 and hour < 7 then
+	local dayStart = DayNightConfig.DAYLIGHT_CLOCK_START
+	local dayEnd = DayNightConfig.DAYLIGHT_CLOCK_END
+	if hour >= 5 and hour < dayStart then
 		return "Dawn"
-	elseif hour >= 7 and hour < 17 then
+	elseif hour >= dayStart and hour < 17 then
 		return "Day"
-	elseif hour >= 17 and hour < 20 then
+	elseif hour >= 17 and hour < dayEnd then
 		return "Dusk"
 	end
 	return "Night"
@@ -206,11 +216,42 @@ function DayNightConfig.applyWeather(day: LightingSample, weatherName: string): 
 	}
 end
 
+local function getCycleOffset(startClock: number): number
+	local dayStart = DayNightConfig.DAYLIGHT_CLOCK_START
+	local dayEnd = DayNightConfig.DAYLIGHT_CLOCK_END
+	local daySpan = dayEnd - dayStart
+	local nightSpan = 24 - daySpan
+	local dayReal = DayNightConfig.DAY_REAL_SECONDS
+	local nightReal = DayNightConfig.NIGHT_REAL_SECONDS
+	local hour = startClock % 24
+
+	if hour >= dayStart and hour < dayEnd then
+		return ((hour - dayStart) / daySpan) * dayReal
+	end
+
+	local nightHour = if hour >= dayEnd then hour - dayEnd else (24 - dayEnd) + hour
+	return dayReal + (nightHour / nightSpan) * nightReal
+end
+
 function DayNightConfig.computeGameClock(serverStartTime: number, startClock: number, nowTime: number?): number
 	local now = nowTime or os.clock()
 	local elapsed = now - serverStartTime
-	local hoursPerSecond = 24 / DayNightConfig.DAY_LENGTH_SECONDS
-	return (startClock + elapsed * hoursPerSecond) % 24
+
+	local dayStart = DayNightConfig.DAYLIGHT_CLOCK_START
+	local dayEnd = DayNightConfig.DAYLIGHT_CLOCK_END
+	local daySpan = dayEnd - dayStart
+	local nightSpan = 24 - daySpan
+	local dayReal = DayNightConfig.DAY_REAL_SECONDS
+	local nightReal = DayNightConfig.NIGHT_REAL_SECONDS
+	local cycleLength = dayReal + nightReal
+	local cyclePos = (elapsed + getCycleOffset(startClock)) % cycleLength
+
+	if cyclePos < dayReal then
+		return dayStart + (cyclePos / dayReal) * daySpan
+	end
+
+	local nightPos = cyclePos - dayReal
+	return (dayEnd + (nightPos / nightReal) * nightSpan) % 24
 end
 
 return DayNightConfig

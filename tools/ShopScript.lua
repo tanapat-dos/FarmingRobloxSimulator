@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 
 local SeedRarityColors = require(ReplicatedStorage:WaitForChild("Modules").SeedRarity)
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
+local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
 local Monetization = require(ReplicatedStorage:WaitForChild("Modules").Monetization)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -142,7 +143,11 @@ RemoteEvents.Purchase.OnClientEvent:Connect(function()
 end)
 
 RemoteEvents.SeedShopTimer.OnClientEvent:Connect(function(timeLeft)
-	timerLabel.Text = "New Seeds in: " .. tostring(timeLeft)
+	if typeof(timeLeft) == "number" then
+		timerLabel.Text = "New Seeds in: " .. ShopStock.formatCountdown(timeLeft)
+	else
+		timerLabel.Text = "New Seeds in: " .. tostring(timeLeft)
+	end
 end)
 
 local restockButton = shopFrame:WaitForChild("RESTOCKButton")

@@ -7,6 +7,11 @@ local EconomyBalance = {}
 
 EconomyBalance.STARTING_CASH = 100
 
+-- Global seed shop restock (also shown on the seed shop HUD timer).
+EconomyBalance.SEED_SHOP = {
+	restockIntervalSeconds = 300,
+}
+
 -- 7-day daily login streak (cash before rebirth/pet multipliers).
 EconomyBalance.DAILY_LOGIN_REWARDS = {
 	{ day = 1, cash = 50, diamonds = 0 },
@@ -34,10 +39,29 @@ EconomyBalance.PLOTS = {
 EconomyBalance.PLANT_DISPLAY = {
 	targetMatureHeightStuds = 6.75,
 	minNormalizeFactor = 0.2,
-	maxNormalizeFactor = 3.5,
+	maxNormalizeFactor = 2.25,
+	-- Optional per-crop mature height target (studs at plantSize 1).
+	cropTargetHeightStuds = {
+		Carrot = 3.8,
+		Radish = 3.8,
+		Wheat = 4.2,
+		Lettuce = 3.6,
+	},
 	-- Fine-tune outliers (multiplies height normalize factor after clamp).
 	cropHeightMultiplier = {
-		Carrot = 0.78,
+		Carrot = 0.55,
+		Mango = 1.65,
+	},
+	-- Multi-harvest fruit clones (asset template × world scale × this).
+	cropFruitDisplayScale = {
+		Mango = 1.08,
+	},
+	-- Hotbar / hand tool size (harvest weight × base × crop override × fruit display).
+	heldToolBaseScale = 0.48,
+	cropHeldToolScale = {
+		Mango = 0.58,
+		Pineapple = 0.72,
+		Pumpkin = 0.78,
 	},
 }
 
@@ -183,7 +207,7 @@ EconomyBalance.EGGS = {
 -- BaseValue drives sell price via GetFruitValue (baseValue * weight^2 * mutations * rarity).
 -- Price and GrowthTime increase per tier; ROI improves slowly to reward progression.
 EconomyBalance.CROPS = {
-	["Carrot Seed"] = { price = 30, baseValue = 2, growthTime = 5, rarity = "Common" },
+	["Carrot Seed"] = { price = 30, baseValue = 2, growthTime = 180, rarity = "Common" },
 	["Radish Seed"] = { price = 40, baseValue = 2, growthTime = 180, rarity = "Common" },
 	["Wheat Seed"] = { price = 50, baseValue = 2, growthTime = 240, rarity = "Common" },
 	["Lettuce Seed"] = { price = 60, baseValue = 3, growthTime = 270, rarity = "Common" },
