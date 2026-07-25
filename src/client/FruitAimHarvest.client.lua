@@ -1,5 +1,6 @@
 --!strict
--- Harvest multi-harvest fruits by aiming at the visible fruit model and pressing E.
+-- Harvest multi-harvest fruits by aiming at the visible fruit model and pressing E
+-- (PC), or by tapping directly on the fruit (mobile — see the TouchTap handler below).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -68,11 +69,8 @@ local function canHarvestServerPlant(serverModel: Model, fruitNumber: string): b
 	return true
 end
 
-local function tryHarvestUnderMouse()
-	if UserInputService:GetFocusedTextBox() then
-		return
-	end
-
+-- Shared by both input paths: PC casts from the mouse cursor, mobile casts from the tap point.
+local function tryHarvestAtScreenPoint(screenX: number, screenY: number)
 	local now = os.clock()
 	if now - lastHarvestClock < FruitHarvestConfig.CLIENT_DEBOUNCE then
 		return
@@ -83,8 +81,7 @@ local function tryHarvestUnderMouse()
 		return
 	end
 
-	local mouseLocation = UserInputService:GetMouseLocation()
-	local ray = camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y)
+	local ray = camera:ViewportPointToRay(screenX, screenY)
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
@@ -118,6 +115,14 @@ local function tryHarvestUnderMouse()
 	remotes.Harvest:FireServer(plantKey, fruitNumber)
 end
 
+local function tryHarvestUnderMouse()
+	if UserInputService:GetFocusedTextBox() then
+		return
+	end
+	local mouseLocation = UserInputService:GetMouseLocation()
+	tryHarvestAtScreenPoint(mouseLocation.X, mouseLocation.Y)
+end
+
 UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
 	if gameProcessed then
 		return
@@ -125,4 +130,18 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.E then
 		tryHarvestUnderMouse()
 	end
+end)
+
+-- Mobile: tap directly on the fruit instead of aim-with-mouse + E. TouchTap only fires from
+-- actual touch hardware (never a mouse click), so this can't double-trigger with the PC path
+-- above and needs no UI — it's a natural extension of "tap what you want to interact with."
+UserInputService.TouchTap:Connect(function(touchPositions: { Vector2 }, gameProcessed: boolean)
+	if gameProcessed or UserInputService:GetFocusedTextBox() then
+		return
+	end
+	local point = touchPositions[1]
+	if not point then
+		return
+	end
+	tryHarvestAtScreenPoint(point.X, point.Y)
 end)

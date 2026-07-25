@@ -46,6 +46,14 @@ local goalFrame: Frame? = nil
 local zoneLabel: TextLabel? = nil
 local fishNameLabel: TextLabel? = nil
 local statusLabel: TextLabel? = nil
+local actionButton: TextButton? = nil
+
+-- Forward-declared: buildGui wires this button to sendTap/tryStartCast, but those are declared
+-- with `local function` further down the file. Without a forward declaration, referencing them
+-- inside buildGui's body (which runs earlier in the file lexically) would silently resolve to
+-- undeclared globals instead of the real local functions.
+local sendTap: () -> ()
+local tryStartCast: () -> ()
 
 local previewModel: Model? = nil
 local previewSpin = 0
@@ -257,6 +265,38 @@ local function buildGui()
 	goalFrame.BorderSizePixel = 0
 	goalFrame.Parent = trackFrame
 	corner(goalFrame, 2)
+
+	--[[
+		Mobile has no F key, so tapping/mashing F to cast and reel is impossible on touch.
+		This button calls the SAME tryStartCast/sendTap functions the F key uses further down
+		this file — same debounce, same remote calls — just a different input trigger. Only
+		shown when UserInputService.TouchEnabled, so PC (mouse/keyboard, and gamepad which
+		already has ButtonX support elsewhere in this codebase) never sees it.
+	]]
+	if UserInputService.TouchEnabled then
+		actionButton = Instance.new("TextButton")
+		actionButton.Name = "TouchAction"
+		actionButton.AnchorPoint = Vector2.new(0.5, 1)
+		actionButton.Position = UDim2.new(0.5, 0, 1, -180)
+		actionButton.Size = UDim2.fromOffset(160, 64)
+		actionButton.BackgroundColor3 = COLORS.fill
+		actionButton.Text = "Cast"
+		actionButton.TextColor3 = COLORS.text
+		actionButton.Font = Enum.Font.GothamBold
+		actionButton.TextSize = 22
+		actionButton.Visible = false
+		actionButton.Parent = gui
+		corner(actionButton, 16)
+		stroke(actionButton, COLORS.fillStroke, 2, 0.15)
+
+		actionButton.MouseButton1Click:Connect(function()
+			if activeSession then
+				sendTap()
+			else
+				tryStartCast()
+			end
+		end)
+	end
 end
 
 local function updateHint()
@@ -276,6 +316,11 @@ local function updateHint()
 	else
 		hintLabel.Visible = false
 	end
+
+	if actionButton then
+		actionButton.Text = "Cast"
+		actionButton.Visible = inZone
+	end
 end
 
 local function setMinigameVisible(visible: boolean)
@@ -285,6 +330,10 @@ local function setMinigameVisible(visible: boolean)
 	end
 	if not visible then
 		clearFishPreview()
+	end
+	if actionButton then
+		actionButton.Text = "Tap!"
+		actionButton.Visible = visible
 	end
 	updateHint()
 end
@@ -361,7 +410,7 @@ local function endMinigame()
 	updateHint()
 end
 
-local function sendTap()
+sendTap = function()
 	if not activeSession then
 		return
 	end
@@ -374,7 +423,7 @@ local function sendTap()
 	})
 end
 
-local function tryStartCast()
+tryStartCast = function()
 	if activeSession then
 		return
 	end

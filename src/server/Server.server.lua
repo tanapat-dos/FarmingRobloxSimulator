@@ -46,9 +46,22 @@ end
 
 local cachedModules = {}
 
+--[[
+	require() and .init() both run through pcall now. Previously a single service erroring at
+	require-time (e.g. a top-level DataStoreService call throwing because DataStore access was
+	momentarily unavailable) silently aborted this ENTIRE loop — every service alphabetically
+	after the failing one never loaded at all, which reads in-game as huge, unrelated chunks of
+	the experience going missing rather than a contained failure. One bad service should not be
+	able to take every other service down with it.
+]]
 for _, moduleScript: ModuleScript in servicesFolder:GetChildren() do
 	if moduleScript:IsA("ModuleScript") then
-		cachedModules[moduleScript.Name] = require(moduleScript)
+		local ok, result = pcall(require, moduleScript)
+		if ok then
+			cachedModules[moduleScript.Name] = result
+		else
+			warn(`[Server] Failed to require service '{moduleScript.Name}': {result}`)
+		end
 	end
 end
 
@@ -58,7 +71,10 @@ requiredModule.Cache = cachedModules
 for moduleName, moduleScript in cachedModules do
 	moduleScript.cachedModules = cachedModules
 	if typeof(moduleScript.init) == "function" then
-		moduleScript.init()
+		local ok, err = pcall(moduleScript.init)
+		if not ok then
+			warn(`[Server] {moduleName}.init() failed: {err}`)
+		end
 	end
 end
 

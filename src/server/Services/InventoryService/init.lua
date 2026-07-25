@@ -261,27 +261,28 @@ function Service.createNewTool(player: Player, toolName: string)
 				toolClone:SetAttribute("fruitID", toolName)
 				toolClone:SetAttribute("isFruit", true)
 
-				for _, part in toolClone:GetDescendants() do
-					if part:IsA("BasePart") then
-						part.Size *= displayScale
-						local mesh = part:FindFirstChildWhichIsA("SpecialMesh")
-						if mesh then
-							mesh.Scale *= displayScale
-						end
+				--[[
+					Multi-mesh crop tools (everything built by IntegrateCropFromSelection and
+					friends — Carrot, Wheat, Tomato, Potato, Candy Vine, Mango, Bubble Rash,
+					Crystal Blooms, Red Mushroom) weld their extra meshes to Handle with
+					WeldConstraint, not Weld/Motor6D. WeldConstraint has no C0/C1 offset to
+					correct, so resizing each part's Size in place (the old approach) left the
+					welded meshes at their original positions relative to a now differently-sized
+					Handle — the pieces visually pulled apart on pickup. Model:ScaleTo (Tool IS a
+					Model) scales every part AND repositions them together around a shared pivot,
+					so welded meshes stay attached regardless of weld type. Single-mesh legacy
+					crops (Eggplant/Pumpkin/Grape, Handle only) scale identically either way.
+				]]
+				-- ScaleTo scales around PrimaryPart. If a template is missing it (older crops,
+				-- or anything not built by the current IntegrateCropFromSelection), fall back
+				-- to Handle so scaling stays centered instead of ballooning off an arbitrary pivot.
+				if not toolClone.PrimaryPart then
+					local fallbackHandle = toolClone:FindFirstChild("Handle")
+					if fallbackHandle and fallbackHandle:IsA("BasePart") then
+						toolClone.PrimaryPart = fallbackHandle
 					end
 				end
-
-				local function scaleCFrame(cf, scaleFactor)
-					local pos, rot = cf.Position, cf - cf.Position
-					return CFrame.new(pos * scaleFactor) * rot
-				end
-
-				for _, weld in toolClone:GetDescendants() do
-					if weld:IsA("Weld") or weld:IsA("Motor6D") then
-						weld.C0 = scaleCFrame(weld.C0, displayScale)
-						weld.C1 = scaleCFrame(weld.C1, displayScale)
-					end
-				end
+				toolClone:ScaleTo(displayScale)
 
 				local handle = toolClone:FindFirstChild("Handle")
 				if handle and handle:IsA("BasePart") then

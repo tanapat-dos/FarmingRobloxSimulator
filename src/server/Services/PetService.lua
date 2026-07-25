@@ -42,6 +42,18 @@ local updatePetBoost = ensureRemote("UpdatePetBoost")
 local resetPetShop = ensureRemote("ResetPetShop")
 local petMenu = ensureRemote("PetMenu")
 
+--[[
+	Equipped-pet visuals used to be FireClient(player, ...) — telling only the equipping
+	player's own client to spawn a follower model. No other player was ever informed a pet
+	existed, so nobody could see anyone else's pet; this was a replication gap, not a bug that
+	"sometimes" failed.
+
+	Fix: track every player's currently-equipped pet here, broadcast changes to ALL clients
+	tagged with the owner's UserId (petFollowUpdate:FireAllClients), and backfill newly-joined
+	players with everyone else's current pet so they don't have to wait for the next equip.
+]]
+local equippedVisualByPlayer: { [Player]: { egg: string, name: string } } = {}
+
 local function generateEggStock()
 	local candidates = {}
 
@@ -268,7 +280,9 @@ function Service.equipPet(player: Player, petId: string)
 	}
 	applyPetBonuses(player, pet)
 
-	petFollowUpdate:FireClient(player, {
+	equippedVisualByPlayer[player] = { egg = pet.egg, name = pet.name }
+	petFollowUpdate:FireAllClients({
+		ownerUserId = player.UserId,
 		equipped = true,
 		egg = pet.egg,
 		name = pet.name,
@@ -288,7 +302,8 @@ function Service.unequipPet(player: Player, petId: string?)
 
 	data.EquippedPet = nil
 	clearPetBonuses(player)
-	petFollowUpdate:FireClient(player, { equipped = false })
+	equippedVisualByPlayer[player] = nil
+	petFollowUpdate:FireAllClients({ ownerUserId = player.UserId, equipped = false })
 	Service.pushPetList(player)
 end
 
@@ -303,11 +318,29 @@ local function sendEquippedFollowVisual(player: Player)
 	data.EquippedPet.boost = boost
 	data.EquippedPet.growthReduction = resolvePetGrowthReduction(data.EquippedPet)
 	applyPetBonuses(player, data.EquippedPet)
-	petFollowUpdate:FireClient(player, {
+	equippedVisualByPlayer[player] = { egg = data.EquippedPet.egg, name = data.EquippedPet.name }
+	petFollowUpdate:FireAllClients({
+		ownerUserId = player.UserId,
 		equipped = true,
 		egg = data.EquippedPet.egg,
 		name = data.EquippedPet.name,
 	})
+end
+
+-- Sends every currently-equipped pet (from every player) to one client — used to backfill a
+-- newly-joined or newly-loaded player so they immediately see everyone else's pets instead of
+-- waiting for those players to re-equip.
+local function backfillAllEquippedVisualsTo(targetPlayer: Player)
+	for ownerPlayer, visual in equippedVisualByPlayer do
+		if ownerPlayer ~= targetPlayer and ownerPlayer.Parent then
+			petFollowUpdate:FireClient(targetPlayer, {
+				ownerUserId = ownerPlayer.UserId,
+				equipped = true,
+				egg = visual.egg,
+				name = visual.name,
+			})
+		end
+	end
 end
 
 local function getRandomPet(eggName)
@@ -451,6 +484,7 @@ function Service.init()
 		destroyLegacyPetTools(player)
 		Service.pushPetList(player)
 		sendEquippedFollowVisual(player)
+		backfillAllEquippedVisualsTo(player)
 	end
 
 	Players.PlayerAdded:Connect(function(player)
@@ -477,6 +511,13 @@ function Service.init()
 			task.spawn(onPlayerReady, player)
 		end
 	end
+
+	Players.PlayerRemoving:Connect(function(player)
+		if equippedVisualByPlayer[player] then
+			equippedVisualByPlayer[player] = nil
+			petFollowUpdate:FireAllClients({ ownerUserId = player.UserId, equipped = false })
+		end
+	end)
 
 	petUse.OnServerEvent:Connect(function(player, action, petId)
 		if action == "equip" then

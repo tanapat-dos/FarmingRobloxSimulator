@@ -34,7 +34,7 @@
 --]]
 
 --=============================== CONFIGURE ===============================
-local CROP_NAME = "Candy Vine" -- display name, no " Seed" suffix
+local CROP_NAME = "Carrot" -- display name, no " Seed" suffix
 local DRY_RUN = false -- true = report the detected stage order and change nothing
 --=========================================================================
 
@@ -329,6 +329,19 @@ local function createSeedTool()
 	tool.Parent = cropSeeds
 end
 
+--[[
+	Handle used to just be meshes[1] — an arbitrary mesh from the harvest model (could be the
+	bulb, could be a leaf). Every visible mesh welded to it, and Grip/GripPos math was based on
+	that arbitrary mesh's size, so the held pose was a guess that got worse the more irregular
+	the crop's shape was.
+
+	Now Handle is an INVISIBLE anchor part with no visible geometry of its own. Every visible
+	mesh welds to it instead, so "what the hand holds" is decoupled from "what's visible" —
+	consistent regardless of crop shape. Positioned at the lower third of the model's height
+	(a natural hold point, like gripping a carrot near its base) and centered on X/Z.
+]]
+local GRIP_HEIGHT_FRACTION = 0.33 -- 0 = bottom of model, 1 = top; lower third reads naturally
+
 local function createFruitToolFromModel(sourceModel: Model)
 	local existing = cropsFolder:FindFirstChild(CROP_NAME)
 	if existing then
@@ -350,24 +363,36 @@ local function createFruitToolFromModel(sourceModel: Model)
 	for _, mesh in meshes do
 		mesh:Clone().Parent = temp
 	end
-	local center = temp:GetBoundingBox().Position
+	local boundsCFrame, boundsSize = temp:GetBoundingBox()
+	local center = boundsCFrame.Position
 	temp:Destroy()
+
+	-- Anchor's position in the same "subtract center" space every mesh below gets re-centered
+	-- into: X/Z at the model's center, Y at the lower-third grip height.
+	local groundY = center.Y - boundsSize.Y / 2
+	local anchorLocalY = (groundY + boundsSize.Y * GRIP_HEIGHT_FRACTION) - center.Y
 
 	local tool = Instance.new("Tool")
 	tool.Name = CROP_NAME
 	tool.RequiresHandle = true
 	tool.CanBeDropped = true
 
-	local handle = meshes[1]:Clone()
+	local handle = Instance.new("Part")
 	handle.Name = "Handle"
+	handle.Size = Vector3.new(0.3, 0.3, 0.3)
+	handle.Transparency = 1
 	handle.Anchored = false
 	handle.CanCollide = false
 	handle.Massless = true
-	handle.CFrame = handle.CFrame - center
+	handle.CFrame = CFrame.new(0, anchorLocalY, 0)
 	handle.Parent = tool
+	-- PrimaryPart is required so Model:ScaleTo (used when the held tool is resized per fruit
+	-- weight in InventoryService) scales everything around the grip anchor instead of an
+	-- arbitrary pivot. Without this the held fruit balloons in size and drifts sideways.
+	tool.PrimaryPart = handle
 
-	for index = 2, #meshes do
-		local clone = meshes[index]:Clone()
+	for _, mesh in meshes do
+		local clone = mesh:Clone()
 		clone.Anchored = false
 		clone.CanCollide = false
 		clone.Massless = true
@@ -380,7 +405,8 @@ local function createFruitToolFromModel(sourceModel: Model)
 		weld.Parent = handle
 	end
 
-	tool.Grip = CFrame.new(0, -handle.Size.Y * 0.15, 0) * CFrame.Angles(math.rad(90), 0, 0)
+	-- Grip offset is based on the model's actual height, not the (now tiny) anchor size.
+	tool.Grip = CFrame.new(0, -boundsSize.Y * 0.15, 0) * CFrame.Angles(math.rad(90), 0, 0)
 	tool.Parent = cropsFolder
 end
 

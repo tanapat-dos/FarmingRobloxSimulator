@@ -28,10 +28,16 @@ local blur = game.Lighting:WaitForChild("Blur")
 local PetShopScreenGui: ScreenGui? = nil
 local PetShopUI: Frame? = nil
 local closePetShopBtn: TextButton? = nil
-local activePetModel = nil
-local followConnection = nil
 local panelOpen = false
 local uiReady = false
+
+--[[
+	Equipped pets are visual-only followers (no server-owned Model to replicate), so every
+	client is responsible for spawning a follower for EVERY player who has one equipped — not
+	just itself. petFollowUpdate now arrives tagged with ownerUserId (see PetService), so we
+	key active pet models per owner instead of assuming "the pet" always belongs to LocalPlayer.
+]]
+local activePets: { [number]: { model: Model, connection: RBXScriptConnection } } = {}
 
 local function resolvePetShopUI(): boolean
 	if uiReady and PetShopUI and PetShopUI.Parent then
@@ -139,19 +145,24 @@ togglePetShop.Event:Connect(function(action)
 	end
 end)
 
-local function despawnPet()
-	if followConnection then
-		followConnection:Disconnect()
-		followConnection = nil
+local function despawnPet(ownerUserId: number)
+	local active = activePets[ownerUserId]
+	if not active then
+		return
 	end
-	if activePetModel then
-		activePetModel:Destroy()
-		activePetModel = nil
-	end
+	active.connection:Disconnect()
+	active.model:Destroy()
+	activePets[ownerUserId] = nil
 end
 
-local function spawnPet(eggName, petName)
-	despawnPet()
+local function getOwnerRoot(ownerUserId: number): BasePart?
+	local ownerPlayer = Players:GetPlayerByUserId(ownerUserId)
+	local character = ownerPlayer and ownerPlayer.Character
+	return character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function spawnPet(ownerUserId: number, eggName: string, petName: string)
+	despawnPet(ownerUserId)
 
 	local folder = petsAssets:FindFirstChild(eggName)
 	if not folder then
@@ -185,46 +196,60 @@ local function spawnPet(eggName, petName)
 		model:ScaleTo(0.75)
 	end)
 
-	local char = player.Character
-	if not char then
-		char = player.CharacterAdded:Wait()
-	end
-	local hrp = char:WaitForChild("HumanoidRootPart", 10)
-	if hrp then
-		model:PivotTo(hrp.CFrame * CFrame.new(2.5, 0, 0))
+	local root = getOwnerRoot(ownerUserId)
+	if not root then
+		-- Owner's character isn't ready yet (they may still be loading in). Wait briefly;
+		-- if it never shows up, the model just starts at the origin until the next update.
+		local ownerPlayer = Players:GetPlayerByUserId(ownerUserId)
+		if ownerPlayer then
+			task.spawn(function()
+				local character = ownerPlayer.CharacterAdded:Wait()
+				local hrp = character:WaitForChild("HumanoidRootPart", 10)
+				if hrp and activePets[ownerUserId] and activePets[ownerUserId].model == model then
+					model:PivotTo(hrp.CFrame * CFrame.new(2.5, 0, 0))
+				end
+			end)
+		end
+	else
+		model:PivotTo(root.CFrame * CFrame.new(2.5, 0, 0))
 	end
 
 	model.Parent = workspace
-	activePetModel = model
 
-	followConnection = RunService.Heartbeat:Connect(function()
-		if not activePetModel or not activePetModel.Parent then
+	local connection = RunService.Heartbeat:Connect(function()
+		if not model.Parent then
 			return
 		end
-		local character = player.Character
-		if not character then
+		local currentRoot = getOwnerRoot(ownerUserId)
+		if not currentRoot then
 			return
 		end
-		local root = character:FindFirstChild("HumanoidRootPart")
-		if not root then
-			return
-		end
-		local pivot = activePetModel:GetPivot()
-		local target = root.CFrame * CFrame.new(2.5, 0, 0)
-		activePetModel:PivotTo(pivot:Lerp(target, 0.15))
+		local pivot = model:GetPivot()
+		local target = currentRoot.CFrame * CFrame.new(2.5, 0, 0)
+		model:PivotTo(pivot:Lerp(target, 0.15))
 	end)
+
+	activePets[ownerUserId] = { model = model, connection = connection }
 end
 
 local petFollowUpdate = remotes:WaitForChild("PetFollowUpdate", 60)
 if petFollowUpdate then
 	petFollowUpdate.OnClientEvent:Connect(function(state)
+		local ownerUserId = state.ownerUserId
+		if typeof(ownerUserId) ~= "number" then
+			return
+		end
 		if state.equipped and state.name and state.egg then
-			spawnPet(state.egg, state.name)
+			spawnPet(ownerUserId, state.egg, state.name)
 		else
-			despawnPet()
+			despawnPet(ownerUserId)
 		end
 	end)
 end
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+	despawnPet(leavingPlayer.UserId)
+end)
 
 local petRollResult = remotes:WaitForChild("PetRollResult", 60)
 if petRollResult then
@@ -235,8 +260,4 @@ if petRollResult then
 	end)
 end
 
-player.CharacterAdded:Connect(function()
-	if activePetModel then
-		task.wait(0.5)
-	end
-end)
+

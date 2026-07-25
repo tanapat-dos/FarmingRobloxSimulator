@@ -3,8 +3,47 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local MessagingService = game:GetService("MessagingService")
+local RunService = game:GetService("RunService")
 
 local CropSellPriceBoard = require(ReplicatedStorage:WaitForChild("Modules").CropSellPriceBoard)
+
+--[[
+	Published games run many separate server instances at once. bestByCrop used to be a plain
+	in-memory table with no persistence or cross-server sync, so each server started with an
+	empty leaderboard and never saw sales made on any other server — it only ever looked
+	correct in Studio, where there's a single server.
+
+	Fix: persist bestByCrop to a DataStore (survives server restarts / new servers spinning up)
+	and publish every new record via MessagingService so all currently-running servers update
+	their live boards within ~1s instead of waiting for their own next sale to trigger a reload.
+]]
+local IS_STUDIO = RunService:IsStudio()
+local LEADERBOARD_KEY = "BestByCrop"
+local LEADERBOARD_TOPIC = "CropLeaderboardSale"
+local SAVE_MIN_INTERVAL = 5 -- throttle DataStore writes when sales come in in quick succession
+
+--[[
+	GetDataStore() can throw (DataStore API momentarily unavailable — happens especially right
+	after a server boots, or if the experience's API access settings aren't enabled yet). This
+	used to run unguarded at module load time. Server.server.lua's service loader does
+	`require(moduleScript)` for every service with NO pcall — one module erroring at require
+	time aborts the whole loop, so every service that hadn't loaded yet (alphabetically after
+	this one) silently never initialized. That is very likely why the leaderboard, and possibly
+	other systems, went completely missing rather than just showing stale data. Guard it.
+]]
+local leaderboardStore: GlobalDataStore? = nil
+if not IS_STUDIO then
+	local ok, store = pcall(function()
+		return DataStoreService:GetDataStore("CropSellLeaderboard_v1")
+	end)
+	if ok then
+		leaderboardStore = store
+	else
+		warn("[CropSellLeaderboardService] GetDataStore failed, leaderboard will not persist:", store)
+	end
+end
 
 local BOARD_MODEL_NAME = "CropPriceBoard"
 local SIGN_NAME = "Sign"
@@ -25,6 +64,8 @@ Service.cachedModules = nil
 local bestByCrop: { [string]: CropSellPriceBoard.BestSaleRecord } = {}
 local boardModel: Model? = nil
 local updateRemote: RemoteEvent
+local pendingSave = false
+local lastSaveClock = 0
 
 local function ensureRemote(name: string): RemoteEvent
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -57,6 +98,41 @@ function Service.refreshWorldBoard()
 	end
 end
 
+local function saveToDataStore()
+	if IS_STUDIO or not leaderboardStore then
+		return
+	end
+	local ok, err = pcall(function()
+		leaderboardStore:SetAsync(LEADERBOARD_KEY, bestByCrop)
+	end)
+	if not ok then
+		warn("[CropSellLeaderboardService] Failed to save leaderboard:", err)
+	end
+end
+
+-- Throttled save: sales can arrive in bursts (multiple players selling at once), and
+-- DataStore has per-key write-rate limits. Coalesce into at most one write per interval.
+local function queueSave()
+	if IS_STUDIO then
+		return
+	end
+	local now = os.clock()
+	if now - lastSaveClock >= SAVE_MIN_INTERVAL then
+		lastSaveClock = now
+		saveToDataStore()
+		return
+	end
+	if pendingSave then
+		return
+	end
+	pendingSave = true
+	task.delay(SAVE_MIN_INTERVAL - (now - lastSaveClock), function()
+		pendingSave = false
+		lastSaveClock = os.clock()
+		saveToDataStore()
+	end)
+end
+
 function Service.recordSale(player: Player, cropName: string, weight: number, harvestRarity: string, sellPrice: number)
 	if not cropName or sellPrice <= 0 then
 		return
@@ -67,7 +143,7 @@ function Service.recordSale(player: Player, cropName: string, weight: number, ha
 		return
 	end
 
-	bestByCrop[cropName] = {
+	local record = {
 		PlayerName = player.Name,
 		UserId = player.UserId,
 		CropName = cropName,
@@ -75,8 +151,53 @@ function Service.recordSale(player: Player, cropName: string, weight: number, ha
 		Rarity = harvestRarity,
 		SellPrice = math.floor(sellPrice * 100 + 0.5) / 100,
 	}
+	bestByCrop[cropName] = record
 
 	Service.broadcastUpdate()
+	queueSave()
+
+	if not IS_STUDIO then
+		pcall(function()
+			MessagingService:PublishAsync(LEADERBOARD_TOPIC, record)
+		end)
+	end
+end
+
+-- Applies a record broadcast by another server (or loaded from DataStore) without re-publishing
+-- or re-saving — avoids an infinite MessagingService echo between servers.
+local function applyRecord(record: CropSellPriceBoard.BestSaleRecord)
+	if typeof(record) ~= "table" or typeof(record.CropName) ~= "string" then
+		return
+	end
+	local current = bestByCrop[record.CropName]
+	if current and record.SellPrice <= current.SellPrice then
+		return
+	end
+	bestByCrop[record.CropName] = record
+	Service.broadcastUpdate()
+end
+
+local function onRemoteSale(message)
+	applyRecord(message.Data)
+end
+
+local function loadFromDataStore()
+	if IS_STUDIO or not leaderboardStore then
+		return
+	end
+	local ok, data = pcall(function()
+		return leaderboardStore:GetAsync(LEADERBOARD_KEY)
+	end)
+	if ok and typeof(data) == "table" then
+		for cropName, record in data do
+			if typeof(record) == "table" then
+				bestByCrop[cropName] = record
+			end
+		end
+		Service.broadcastUpdate()
+	elseif not ok then
+		warn("[CropSellLeaderboardService] Failed to load leaderboard:", data)
+	end
 end
 
 local function getShopFloorY(shops: Instance): number
@@ -130,6 +251,13 @@ end
 local function getBoardPlacement(shops: Instance): (Vector3, CFrame)
 	local anchor = shops:FindFirstChild(ANCHOR_NAME)
 	if anchor and anchor:IsA("BasePart") then
+		-- Force-anchor the placement marker. If it's left unanchored + non-collidable (as it
+		-- was) it falls through the world the moment the game runs, and the board gets built
+		-- wherever it happened to fall to — which varied between Studio (instant build) and
+		-- published (build delayed behind a DataStore yield, so the marker fell further). This
+		-- guarantees a stable, consistent build position regardless of timing.
+		anchor.Anchored = true
+		anchor.AssemblyLinearVelocity = Vector3.zero
 		-- Anchor position = floor spot; anchor rotation = which way the sign faces.
 		local signCFrame = anchor.CFrame * CFrame.new(0, SIGN_CENTER_HEIGHT, 0)
 		return anchor.Position, signCFrame
@@ -238,7 +366,12 @@ local function applyBoardTransform(model: Model, floorPosition: Vector3, signCFr
 end
 
 local function buildBoardModel(shops: Instance, floorPosition: Vector3, signCFrame: CFrame)
-	local existing = shops:FindFirstChild(BOARD_MODEL_NAME)
+	-- Parented directly to Workspace (not the Shops folder). Persistent streaming is only
+	-- reliably exempt from StreamingEnabled culling for models that are direct children of
+	-- Workspace; nested under a Folder it was still getting streamed out for players who spawn
+	-- far away (their garden), which is why it showed in Studio Play Solo but never in the
+	-- published game. Position is an absolute world CFrame, so the parent doesn't move it.
+	local existing = workspace:FindFirstChild(BOARD_MODEL_NAME) or shops:FindFirstChild(BOARD_MODEL_NAME)
 	local hasManualAnchor = shops:FindFirstChild(ANCHOR_NAME) ~= nil
 	-- Reuse only if the saved board already has the current proportions;
 	-- otherwise fall through and rebuild (replaces the old oversized sign).
@@ -273,6 +406,12 @@ local function buildBoardModel(shops: Instance, floorPosition: Vector3, signCFra
 		if not ok then
 			warn("[CropSellLeaderboardService] Failed to populate board UI:", err)
 		end
+
+		-- Persistent + direct Workspace child so it's exempt from StreamingEnabled culling.
+		if existing.Parent ~= workspace then
+			existing.Parent = workspace
+		end
+		existing.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 
 		CollectionService:AddTag(existing, "CropPriceBoard")
 		return existing
@@ -319,7 +458,11 @@ local function buildBoardModel(shops: Instance, floorPosition: Vector3, signCFra
 
 	CollectionService:AddTag(model, "CropPriceBoard")
 	model.PrimaryPart = sign
-	model.Parent = shops
+	-- Persistent + direct Workspace child (not the Shops folder) so it's reliably exempt from
+	-- StreamingEnabled culling. Set before parenting so it's persistent the moment it enters
+	-- the DataModel.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	model.Parent = workspace
 
 	local ok, err = pcall(function()
 		CropSellPriceBoard.populateSignGui(sign, Service.getEntries())
@@ -340,6 +483,10 @@ local function setupWorldBoard()
 
 	local floorPosition, signCFrame = getBoardPlacement(shops)
 	boardModel = buildBoardModel(shops, floorPosition, signCFrame)
+
+	if not boardModel then
+		warn("[CropSellLeaderboardService] Board model was not created")
+	end
 end
 
 function Service.init()
@@ -357,13 +504,19 @@ function Service.init()
 		return Service.getEntries()
 	end
 
+	if not IS_STUDIO then
+		pcall(function()
+			MessagingService:SubscribeAsync(LEADERBOARD_TOPIC, onRemoteSale)
+		end)
+	end
+
 	-- Build the board first, then push initial state to any players already present.
 	task.spawn(function()
+		loadFromDataStore()
+
 		local ok, err = pcall(setupWorldBoard)
 		if not ok then
 			warn("[CropSellLeaderboardService] setupWorldBoard failed:", err)
-		elseif not boardModel then
-			warn("[CropSellLeaderboardService] Board model was not created")
 		end
 
 		-- Push initial entries to players who joined before the board was ready.

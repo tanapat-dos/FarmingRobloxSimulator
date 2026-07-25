@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 
 local DayNightConfig = require(ReplicatedStorage:WaitForChild("Modules").DayNightConfig)
 local EnvironmentLighting = require(ReplicatedStorage:WaitForChild("Modules").EnvironmentLighting)
@@ -29,6 +30,29 @@ local DEFAULT_RESTOCK_SECONDS = 300
 
 local restockTargetSeconds = DEFAULT_RESTOCK_SECONDS
 local restockSyncedAt = os.clock()
+
+--[[
+	The top-right stack (diamonds/clock/seed timer/weather) is built at fixed pixel sizes
+	tuned for a desktop viewport. On a phone's narrower/shorter screen that same fixed width
+	(340px, HUD_STACK_WIDTH) eats a large fraction of the display and can crowd the corner or
+	clip. This mirrors MenuBarClient's UIScale pattern, but shrinks on a narrow viewport instead
+	of growing — the goal here is "don't take over a small screen," not "stay tappable" (this
+	stack has no buttons). Only applies when UserInputService.TouchEnabled, so PC keeps the
+	exact sizing already tuned; a desktop window resize never triggers this at all.
+]]
+local HUD_REFERENCE_VIEWPORT_WIDTH = 1280
+local HUD_TOUCH_MIN_SCALE = 0.55
+local HUD_TOUCH_MAX_SCALE = 1
+
+local function computeHudScale(): number
+	if not UserInputService.TouchEnabled then
+		return 1
+	end
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(HUD_REFERENCE_VIEWPORT_WIDTH, 720)
+	local widthRatio = viewport.X / HUD_REFERENCE_VIEWPORT_WIDTH
+	return math.clamp(widthRatio, HUD_TOUCH_MIN_SCALE, HUD_TOUCH_MAX_SCALE)
+end
 
 local function getServerClock(): number
 	local clock = workspace:GetAttribute("GameClock")
@@ -249,6 +273,11 @@ local function ensureHud(): (TextLabel, TextLabel)
 	stack.Parent = gui
 	hudStack = stack
 
+	local hudScale = Instance.new("UIScale")
+	hudScale.Name = "ResponsiveScale"
+	hudScale.Scale = computeHudScale()
+	hudScale.Parent = stack
+
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Vertical
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
@@ -333,6 +362,28 @@ local function ensureHud(): (TextLabel, TextLabel)
 	connectDiamondHudListener()
 	updateDiamondHudDisplay()
 	return clock, seed
+end
+
+local function refreshHudScale()
+	ensureHud()
+	local scale = hudStack and hudStack:FindFirstChildOfClass("UIScale")
+	if scale then
+		scale.Scale = computeHudScale()
+	end
+end
+
+do
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshHudScale)
+	end
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		local newCamera = workspace.CurrentCamera
+		if newCamera then
+			newCamera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshHudScale)
+			refreshHudScale()
+		end
+	end)
 end
 
 local function setWeatherHud(weatherName: string)
