@@ -37,6 +37,46 @@ local CurrentShopData = {}
 local dataLoaded = false
 local playerShopData = {}
 
+-- Tiers the player hasn't unlocked yet, pushed alongside stock by SeedShopService.
+-- Display only — the server re-checks every gate on purchase.
+local LOCKED_ROW_PREFIX = "LockedTier_"
+local LOCKED_ROW_BASE_ORDER = 10000 -- always sorts below real crop rows
+
+local LOCKED_COLORS = {
+	row = Color3.fromRGB(26, 30, 40),
+	title = Color3.fromRGB(150, 158, 175),
+	progress = Color3.fromRGB(120, 128, 145),
+}
+
+-- Compact number, e.g. 15000000 -> "15M", 340000 -> "340K"
+local function abbreviateAmount(n: number): string
+	if n >= 1e9 then
+		return ("%.3gB"):format(n / 1e9)
+	elseif n >= 1e6 then
+		return ("%.3gM"):format(n / 1e6)
+	elseif n >= 1e3 then
+		return ("%.3gK"):format(n / 1e3)
+	end
+	return tostring(math.floor(n))
+end
+
+-- First unmet gate, e.g. "$340K / $2M earned" or "312 / 500 fruits harvested"
+local function formatUnlockProgress(progress): string
+	if not progress then
+		return "Locked"
+	end
+	for _, gate in ipairs(progress) do
+		if not gate.met then
+			local prefix = gate.stat == "TotalEarned" and "$" or ""
+			return ("%s%s / %s%s %s"):format(
+				prefix, abbreviateAmount(gate.have),
+				prefix, abbreviateAmount(gate.goal),
+				gate.label or "")
+		end
+	end
+	return "Locked"
+end
+
 -- Scale-based template size (0.1 height) + UIAspectRatioConstraint shrinks rows badly.
 local CROP_ITEM_SIZE = UDim2.new(0.94, 0, 0, 110)
 local BUY_FRAME_OPEN_SIZE = UDim2.new(0.94, 0, 0, 52)
@@ -327,12 +367,82 @@ shopFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 	end
 end)
 
-RemoteEvents.ResetSeedShop.OnClientEvent:Connect(function(cropData)
+--[[
+	Renders one row per locked tier so the ladder stays legible — a locked tier with no
+	explanation reads as missing content rather than as a goal.
+	Rows are non-interactive; the server excludes locked crops from stock and re-checks the
+	gate on purchase.
+]]
+local function renderLockedTiers(lockedTiers)
+	for _, child in ipairs(scrollFrame:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name:find("^" .. LOCKED_ROW_PREFIX) then
+			child:Destroy()
+		end
+	end
+
+	if not lockedTiers then
+		return
+	end
+
+	for index, entry in ipairs(lockedTiers) do
+		local row = Instance.new("Frame")
+		row.Name = LOCKED_ROW_PREFIX .. tostring(entry.tier)
+		row.Size = UDim2.new(0.94, 0, 0, 56)
+		row.BackgroundColor3 = LOCKED_COLORS.row
+		row.BackgroundTransparency = 0.15
+		row.BorderSizePixel = 0
+		row.LayoutOrder = LOCKED_ROW_BASE_ORDER + index
+		row.Parent = scrollFrame
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 10)
+		corner.Parent = row
+
+		local rarityStyle = SeedRarityColors[entry.tier]
+		local accent = Instance.new("Frame")
+		accent.Size = UDim2.new(0, 4, 1, -14)
+		accent.Position = UDim2.fromOffset(7, 7)
+		accent.BorderSizePixel = 0
+		accent.BackgroundTransparency = 0.45
+		accent.BackgroundColor3 = typeof(rarityStyle) == "Color3" and rarityStyle
+			or LOCKED_COLORS.progress
+		accent.Parent = row
+
+		local accentCorner = Instance.new("UICorner")
+		accentCorner.CornerRadius = UDim.new(0, 2)
+		accentCorner.Parent = accent
+
+		local title = Instance.new("TextLabel")
+		title.Position = UDim2.fromOffset(20, 7)
+		title.Size = UDim2.new(1, -30, 0, 24)
+		title.BackgroundTransparency = 1
+		title.Text = ("🔒  %s Seeds"):format(entry.label or entry.tier)
+		title.TextColor3 = LOCKED_COLORS.title
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.Font = Enum.Font.GothamBold
+		title.TextSize = 16
+		title.Parent = row
+
+		local progress = Instance.new("TextLabel")
+		progress.Position = UDim2.fromOffset(20, 31)
+		progress.Size = UDim2.new(1, -30, 0, 18)
+		progress.BackgroundTransparency = 1
+		progress.Text = formatUnlockProgress(entry.progress)
+		progress.TextColor3 = LOCKED_COLORS.progress
+		progress.TextXAlignment = Enum.TextXAlignment.Left
+		progress.Font = Enum.Font.Gotham
+		progress.TextSize = 13
+		progress.Parent = row
+	end
+end
+
+RemoteEvents.ResetSeedShop.OnClientEvent:Connect(function(cropData, lockedTiers)
 	CurrentShopData = cropData
 	playerShopData = {}
 	dataLoaded = true
 
 	buildSeedCards()
+	renderLockedTiers(lockedTiers)
 
 	for _, child in scrollFrame:GetChildren() do
 		if child:IsA("GuiObject") and child.Name:find(" Seed$") then

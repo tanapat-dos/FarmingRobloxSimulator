@@ -15,6 +15,7 @@ local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local achieveRemote = remotes:WaitForChild("Achievements")
 
 local AchievementConfig = require(ReplicatedStorage:WaitForChild("Modules").AchievementConfig)
+local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
 
 local COLORS = {
 	panel      = Color3.fromRGB(20, 22, 34),
@@ -71,7 +72,7 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(620, 580)
+	panel.Size = UDim2.fromOffset(700, 650)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.Parent = gui
 	corner(panel, 18)
@@ -99,7 +100,7 @@ local function buildPanel()
 	title.TextColor3 = COLORS.gold
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 24
+	title.TextSize = 26
 	title.Parent = hBar
 
 	local closeBtn = Instance.new("TextButton")
@@ -107,12 +108,10 @@ local function buildPanel()
 	closeBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	closeBtn.Size = UDim2.fromOffset(36, 36)
 	closeBtn.BackgroundColor3 = COLORS.close
-	closeBtn.Text = "✕"
-	closeBtn.TextColor3 = COLORS.text
-	closeBtn.Font = Enum.Font.GothamBold
-	closeBtn.TextSize = 18
+	closeBtn.Text = ""
 	closeBtn.Parent = hBar
 	corner(closeBtn, 10)
+	CloseIconUi.build(closeBtn, { color = COLORS.text })
 	closeBtn.MouseButton1Click:Connect(function()
 		if gui then gui.Enabled = false end
 	end)
@@ -120,8 +119,8 @@ local function buildPanel()
 	-- Stats bar
 	local statsBar = Instance.new("Frame")
 	statsBar.Name = "StatsBar"
-	statsBar.Position = UDim2.fromOffset(16, 70)
-	statsBar.Size = UDim2.new(1, -32, 0, 52)
+	statsBar.Position = UDim2.fromOffset(18, 76)
+	statsBar.Size = UDim2.new(1, -36, 0, 58)
 	statsBar.BackgroundColor3 = COLORS.section
 	statsBar.Parent = panel
 	corner(statsBar, 10)
@@ -142,8 +141,8 @@ local function buildPanel()
 	-- Scrolling list
 	listFrame = Instance.new("ScrollingFrame")
 	listFrame.Name = "List"
-	listFrame.Position = UDim2.fromOffset(16, 130)
-	listFrame.Size = UDim2.new(1, -32, 1, -142)
+	listFrame.Position = UDim2.fromOffset(18, 142)
+	listFrame.Size = UDim2.new(1, -36, 1, -154)
 	listFrame.BackgroundTransparency = 1
 	listFrame.ScrollBarThickness = 4
 	listFrame.ScrollBarImageColor3 = Color3.fromRGB(88, 202, 110)
@@ -242,7 +241,7 @@ local function renderState(state)
 
 			local card = Instance.new("Frame")
 			card.LayoutOrder = layoutOrder
-			card.Size = UDim2.new(1, 0, 0, 86)
+			card.Size = UDim2.new(1, 0, 0, 94)
 			card.BackgroundColor3 = isDone and COLORS.cardDone or COLORS.card
 			card.Parent = listFrame
 			corner(card, 12)
@@ -263,8 +262,8 @@ local function renderState(state)
 
 			-- Icon badge
 			local badge = Instance.new("Frame")
-			badge.Size = UDim2.fromOffset(46, 46)
-			badge.Position = UDim2.fromOffset(12, 20)
+			badge.Size = UDim2.fromOffset(50, 50)
+			badge.Position = UDim2.fromOffset(12, 22)
 			badge.BackgroundColor3 = isDone and catColor or COLORS.barBg
 			badge.BackgroundTransparency = isDone and 0.25 or 0.2
 			badge.Parent = card
@@ -276,7 +275,7 @@ local function renderState(state)
 			iconLbl.Text = a.icon
 			iconLbl.TextColor3 = COLORS.text
 			iconLbl.Font = Enum.Font.GothamBold
-			iconLbl.TextSize = 26
+			iconLbl.TextSize = 28
 			iconLbl.Parent = badge
 
 			-- Title
@@ -288,7 +287,7 @@ local function renderState(state)
 			titleLbl.TextColor3 = isDone and COLORS.text or COLORS.subtext
 			titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 			titleLbl.Font = Enum.Font.GothamBold
-			titleLbl.TextSize = 16
+			titleLbl.TextSize = 17
 			titleLbl.Parent = card
 
 			-- Desc
@@ -305,8 +304,8 @@ local function renderState(state)
 
 			-- Progress bar background
 			local barBg = Instance.new("Frame")
-			barBg.Position = UDim2.fromOffset(68, 54)
-			barBg.Size = UDim2.new(1, -160, 0, 10)
+			barBg.Position = UDim2.fromOffset(68, 58)
+			barBg.Size = UDim2.new(1, -160, 0, 11)
 			barBg.BackgroundColor3 = COLORS.barBg
 			barBg.BackgroundTransparency = 0.3
 			barBg.Parent = card
@@ -322,7 +321,7 @@ local function renderState(state)
 
 			-- Progress text
 			local progLbl = Instance.new("TextLabel")
-			progLbl.Position = UDim2.fromOffset(68, 66)
+			progLbl.Position = UDim2.fromOffset(68, 72)
 			progLbl.Size = UDim2.new(1, -160, 0, 14)
 			progLbl.BackgroundTransparency = 1
 			progLbl.Text = ("%d / %d"):format(a.progress, a.goal)

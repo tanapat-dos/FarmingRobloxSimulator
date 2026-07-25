@@ -30,6 +30,10 @@
           "$path": "src/server/Services/SeedShopService.lua"
         },
 
+        "FishCoinShopService": {
+          "$path": "src/server/Services/FishCoinShopService.lua"
+        },
+
         "ProductService": {
           "$path": "src/server/Services/ProductService.lua"
         },
@@ -111,9 +115,6 @@
 
     "StarterPlayer": {
       "$ignoreUnknownInstances": true,
-      "$properties": {
-        "BackpackEnabled": true
-      },
 
       "StarterPlayerScripts": {
         "$ignoreUnknownInstances": true,
@@ -176,6 +177,10 @@
 
         "PetMenuClient": {
           "$path": "src/client/PetMenuClient.client.lua"
+        },
+
+        "FishCoinShopClient": {
+          "$path": "src/client/FishCoinShopClient.client.lua"
         },
 
         "CropPriceLeaderboard": {
@@ -267,6 +272,10 @@
           "$path": "src/shared/Modules/Monetization.lua"
         },
 
+        "CloseIconUi": {
+          "$path": "src/shared/Modules/CloseIconUi.lua"
+        },
+
         "SeedRarity": {
           "$path": "src/shared/Modules/SeedRarity.lua"
         },
@@ -313,6 +322,10 @@
 
         "ShopStock": {
           "$path": "src/shared/Modules/ShopStock.lua"
+        },
+
+        "CropTierConfig": {
+          "$path": "src/shared/Modules/CropTierConfig.lua"
         },
 
         "EconomyBalance": {

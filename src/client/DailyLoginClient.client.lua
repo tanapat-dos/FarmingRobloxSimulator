@@ -15,6 +15,7 @@ local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local dailyRemote = remotes:WaitForChild("DailyLogin")
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
+local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
 
 local REWARDS = EconomyBalance.DAILY_LOGIN_REWARDS
 
@@ -100,7 +101,7 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(580, 400)
+	panel.Size = UDim2.fromOffset(660, 450)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.Parent = gui
 	corner(panel, 18)
@@ -128,7 +129,7 @@ local function buildPanel()
 	title.TextColor3 = COLORS.gold
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 24
+	title.TextSize = 26
 	title.Parent = headerBar
 
 	local closeBtn = Instance.new("TextButton")
@@ -136,18 +137,16 @@ local function buildPanel()
 	closeBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	closeBtn.Size = UDim2.fromOffset(34, 34)
 	closeBtn.BackgroundColor3 = COLORS.close
-	closeBtn.Text = "✕"
-	closeBtn.TextColor3 = COLORS.text
-	closeBtn.Font = Enum.Font.GothamBold
-	closeBtn.TextSize = 16
+	closeBtn.Text = ""
 	closeBtn.Parent = headerBar
 	corner(closeBtn, 8)
+	CloseIconUi.build(closeBtn, { color = COLORS.text })
 	closeBtn.MouseButton1Click:Connect(close)
 
 	-- Day cards row
 	local cardsRow = Instance.new("Frame")
-	cardsRow.Position = UDim2.fromOffset(16, 72)
-	cardsRow.Size = UDim2.new(1, -32, 0, 188)
+	cardsRow.Position = UDim2.fromOffset(18, 80)
+	cardsRow.Size = UDim2.new(1, -36, 0, 212)
 	cardsRow.BackgroundTransparency = 1
 	cardsRow.Parent = panel
 
@@ -171,42 +170,42 @@ local function buildPanel()
 
 		local dayLabel = Instance.new("TextLabel")
 		dayLabel.Name = "DayNum"
-		dayLabel.Position = UDim2.fromOffset(0, 5)
-		dayLabel.Size = UDim2.new(1, 0, 0, 18)
+		dayLabel.Position = UDim2.fromOffset(0, 6)
+		dayLabel.Size = UDim2.new(1, 0, 0, 20)
 		dayLabel.BackgroundTransparency = 1
 		dayLabel.Text = ("Day %d"):format(i)
 		dayLabel.TextColor3 = COLORS.subtext
 		dayLabel.Font = Enum.Font.GothamBold
-		dayLabel.TextSize = 12
+		dayLabel.TextSize = 13
 		dayLabel.Parent = card
 
 		local iconLabel = Instance.new("TextLabel")
 		iconLabel.Name = "Icon"
-		iconLabel.Position = UDim2.fromOffset(0, 26)
-		iconLabel.Size = UDim2.new(1, 0, 0, 40)
+		iconLabel.Position = UDim2.fromOffset(0, 29)
+		iconLabel.Size = UDim2.new(1, 0, 0, 45)
 		iconLabel.BackgroundTransparency = 1
 		iconLabel.Text = DAY_ICONS[i]
 		iconLabel.TextColor3 = COLORS.text
 		iconLabel.Font = Enum.Font.GothamBold
-		iconLabel.TextSize = 30
+		iconLabel.TextSize = 34
 		iconLabel.Parent = card
 
 		local cashLabel = Instance.new("TextLabel")
 		cashLabel.Name = "Cash"
-		cashLabel.Position = UDim2.fromOffset(0, 70)
-		cashLabel.Size = UDim2.new(1, 0, 0, 20)
+		cashLabel.Position = UDim2.fromOffset(0, 79)
+		cashLabel.Size = UDim2.new(1, 0, 0, 22)
 		cashLabel.BackgroundTransparency = 1
 		cashLabel.Text = ("$%s"):format(formatCash(r.cash))
 		cashLabel.TextColor3 = COLORS.gold
 		cashLabel.Font = Enum.Font.GothamBold
-		cashLabel.TextSize = 11
+		cashLabel.TextSize = 12
 		cashLabel.Parent = card
 
 		if r.diamonds and r.diamonds > 0 then
 			local diaLabel = Instance.new("TextLabel")
 			diaLabel.Name = "Diamonds"
-			diaLabel.Position = UDim2.fromOffset(0, 90)
-			diaLabel.Size = UDim2.new(1, 0, 0, 18)
+			diaLabel.Position = UDim2.fromOffset(0, 101)
+			diaLabel.Size = UDim2.new(1, 0, 0, 20)
 			diaLabel.BackgroundTransparency = 1
 			diaLabel.Text = ("💎 +%d"):format(r.diamonds)
 			diaLabel.TextColor3 = COLORS.diamond
@@ -220,13 +219,13 @@ local function buildPanel()
 
 	-- Claim button
 	claimButton = Instance.new("TextButton")
-	claimButton.Position = UDim2.fromOffset(16, 272)
-	claimButton.Size = UDim2.new(1, -32, 0, 52)
+	claimButton.Position = UDim2.fromOffset(18, 306)
+	claimButton.Size = UDim2.new(1, -36, 0, 58)
 	claimButton.BackgroundColor3 = COLORS.green
 	claimButton.Text = "✅  Claim Today's Reward"
 	claimButton.TextColor3 = COLORS.text
 	claimButton.Font = Enum.Font.GothamBold
-	claimButton.TextSize = 20
+	claimButton.TextSize = 22
 	claimButton.Parent = panel
 	corner(claimButton, 12)
 	stroke(claimButton, COLORS.greenDark, 2, 0.15)
@@ -235,8 +234,8 @@ local function buildPanel()
 	end)
 
 	statusLabel = Instance.new("TextLabel")
-	statusLabel.Position = UDim2.fromOffset(16, 332)
-	statusLabel.Size = UDim2.new(1, -32, 0, 24)
+	statusLabel.Position = UDim2.fromOffset(18, 374)
+	statusLabel.Size = UDim2.new(1, -36, 0, 26)
 	statusLabel.BackgroundTransparency = 1
 	statusLabel.Text = ""
 	statusLabel.RichText = true
@@ -246,8 +245,8 @@ local function buildPanel()
 	statusLabel.Parent = panel
 
 	countdownLabel = Instance.new("TextLabel")
-	countdownLabel.Position = UDim2.fromOffset(16, 358)
-	countdownLabel.Size = UDim2.new(1, -32, 0, 22)
+	countdownLabel.Position = UDim2.fromOffset(18, 402)
+	countdownLabel.Size = UDim2.new(1, -36, 0, 24)
 	countdownLabel.BackgroundTransparency = 1
 	countdownLabel.Text = ""
 	countdownLabel.TextColor3 = COLORS.subtext
@@ -270,8 +269,8 @@ local function applyDayCards(currentDay: number, alreadyClaimed: boolean)
 			if not check and (alreadyClaimed and i == currentDay) then
 				local c = Instance.new("TextLabel")
 				c.Name = "Check"
-				c.Position = UDim2.fromOffset(0, 118)
-				c.Size = UDim2.new(1, 0, 0, 18)
+				c.Position = UDim2.fromOffset(0, 133)
+				c.Size = UDim2.new(1, 0, 0, 20)
 				c.BackgroundTransparency = 1
 				c.Text = "✅"
 				c.TextColor3 = COLORS.green

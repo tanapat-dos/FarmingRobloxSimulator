@@ -13,6 +13,7 @@ local studioStock = nil -- in-memory stock for Studio mode
 local SeedData = require(ReplicatedStorage:WaitForChild("Modules").SeedData)
 local ShopStock = require(ReplicatedStorage:WaitForChild("Modules").ShopStock)
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
+local CropTierConfig = require(ReplicatedStorage:WaitForChild("Modules").CropTierConfig)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
@@ -45,9 +46,9 @@ function Service.getRandomPlantSize(name: string, extraData: any)
 end
 
 function Service.getRandomFruitSize(name: string, extraData: any)
-	if name == "Carrot Seed" then
-		return 1
-	end
+	-- NOTE: Carrot used to hard-return 1 here, which deleted the weight^2 term from
+	-- GetFruitValue and made the tutorial crop the worst in the game. It now uses the
+	-- standard roll like every other single-harvest crop.
 	if name == "Mango Seed" then
 		local r = Random.new():NextNumber(0, 1)
 		return 0.75 + (r ^ 2.2) * 1.1
@@ -242,7 +243,15 @@ end
 
 local seedStorage = ServerStorage:WaitForChild("CropSeeds")
 
+-- Seeds sold in the Fish Coin Shop instead of the cash seed shop.
+local FISH_COIN_ONLY_SEEDS = {
+	["Crystal Blooms Seed"] = true,
+}
+
 local function isShopSeed(seedName: string): boolean
+	if FISH_COIN_ONLY_SEEDS[seedName] then
+		return false
+	end
 	if not SeedData.isPlayable(seedName) then
 		return false
 	end
@@ -298,6 +307,64 @@ local function normalizeStock(stock: any)
 		return stock.Seeds
 	end
 	return stock
+end
+
+-- ------------------------------------------------------------------ tier gating
+--[[
+	Stock generation stays global so every player shares the same restock cycle (and the
+	MemoryStore-backed stock stays a single value). Gates are per-player, so filtering happens
+	here at delivery time instead.
+
+	Returns:
+	  stock       — only crops whose tier the player has unlocked
+	  lockedTiers — display-only descriptions of the tiers still locked, so the shop UI can
+	                render them with live progress. Grants nothing; the server re-checks the
+	                gate in the BuyCrop handler regardless.
+]]
+function Service.buildPlayerStockView(player: Player, stock: any)
+	local dataService = cachedModules.Cache.DataService
+	local data = dataService and dataService.getData(player)
+	local stats = CropTierConfig.buildStats(data)
+
+	local visible = {}
+	if stock then
+		for seedName, entry in stock do
+			if CropTierConfig.isSeedUnlocked(stats, seedName) then
+				visible[seedName] = entry
+			end
+		end
+	end
+
+	local lockedTiers = {}
+	for _, tierName in CropTierConfig.TIER_ORDER do
+		if not CropTierConfig.isUnlocked(stats, tierName) then
+			local tier = CropTierConfig.TIERS[tierName]
+			table.insert(lockedTiers, {
+				tier = tierName,
+				label = tier and tier.label or tierName,
+				progress = CropTierConfig.getUnlockProgress(stats, tierName),
+			})
+		end
+	end
+
+	return visible, lockedTiers
+end
+
+-- Pushes the player's filtered stock view. No-op until their data has loaded; the
+-- PlayerAdded retry loop will call again once it has.
+function Service.pushStockToPlayer(player: Player, stock: any): boolean
+	if player:GetAttribute("DataLoaded") ~= true then
+		return false
+	end
+	local visible, lockedTiers = Service.buildPlayerStockView(player, stock)
+	RemoteEvents.ResetSeedShop:FireClient(player, visible, lockedTiers)
+	return true
+end
+
+local function pushStockToAll(stock: any)
+	for _, player in Players:GetPlayers() do
+		Service.pushStockToPlayer(player, stock)
+	end
 end
 
 function Service:GetCurrentStock()
@@ -357,7 +424,8 @@ function Service:BroadcastRestock()
 		end)
 	end
 
-	RemoteEvents.ResetSeedShop:FireAllClients(stock)
+	-- Per-player rather than FireAllClients: each player sees only the tiers they've unlocked.
+	pushStockToAll(stock)
 
 	local petService = cachedModules.Cache.PetService
 	if petService and petService.BroadcastRestock then
@@ -368,7 +436,7 @@ end
 local function OnRestockMessage()
 	local stock = Service:GetCurrentStock()
 	if stock then
-		RemoteEvents.ResetSeedShop:FireAllClients(stock)
+		pushStockToAll(stock)
 	end
 end
 
@@ -416,8 +484,9 @@ function Service.init()
 			local tries = IS_STUDIO and 30 or 10
 			for _ = 1, tries do
 				local stock = Service:GetCurrentStock()
-				if stock then
-					RemoteEvents.ResetSeedShop:FireClient(player, stock)
+				-- pushStockToPlayer returns false until DataLoaded, so this loop also
+				-- doubles as the wait-for-data retry.
+				if stock and Service.pushStockToPlayer(player, stock) then
 					return
 				end
 				task.wait(1)
@@ -427,6 +496,20 @@ function Service.init()
 
 	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName)
 		if player:GetAttribute("DataLoaded") ~= true then return end
+		if typeof(cropName) ~= "string" then return end
+
+		-- Tier gate, re-checked here rather than trusting the pushed stock view. Unknown
+		-- seeds fail closed (getTierForSeed returns nil).
+		local playerData = dataService.getData(player)
+		local stats = CropTierConfig.buildStats(playerData)
+		if not CropTierConfig.isSeedUnlocked(stats, cropName) then
+			local notifyRemote = RemoteEvents:FindFirstChild("Notify")
+			if notifyRemote then
+				notifyRemote:FireClient(player, "You haven't unlocked that seed tier yet.", "error")
+			end
+			return
+		end
+
 		local stock = Service:GetCurrentStock()
 		if not stock then return end
 		local crop = stock[cropName]

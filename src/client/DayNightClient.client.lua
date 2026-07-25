@@ -38,6 +38,43 @@ local function getServerClock(): number
 	return DayNightConfig.START_CLOCK
 end
 
+--[[
+	Atmosphere and ColorCorrection are created here rather than relied upon in the place file,
+	so the look survives a fresh place and can't be silently broken by a Studio edit.
+	(The place had an Atmosphere with Density 0.00025 — effectively off — which is why the
+	map read as flat: no aerial perspective means no depth cue at distance.)
+]]
+local atmosphere: Atmosphere? = nil
+local colorCorrection: ColorCorrectionEffect? = nil
+
+local function ensureAtmosphere(): Atmosphere
+	if atmosphere and atmosphere.Parent then
+		return atmosphere
+	end
+	local existing = Lighting:FindFirstChildOfClass("Atmosphere")
+	if not existing then
+		existing = Instance.new("Atmosphere")
+		existing.Name = "Atmosphere"
+		existing.Parent = Lighting
+	end
+	atmosphere = existing
+	return existing
+end
+
+local function ensureColorCorrection(): ColorCorrectionEffect
+	if colorCorrection and colorCorrection.Parent then
+		return colorCorrection
+	end
+	local existing = Lighting:FindFirstChild("DayNightGrade")
+	if not (existing and existing:IsA("ColorCorrectionEffect")) then
+		existing = Instance.new("ColorCorrectionEffect")
+		existing.Name = "DayNightGrade"
+		existing.Parent = Lighting
+	end
+	colorCorrection = existing :: ColorCorrectionEffect
+	return colorCorrection
+end
+
 local function applyLighting(clock: number, weatherName: string)
 	local day = DayNightConfig.sampleDayLighting(clock)
 	local merged = DayNightConfig.applyWeather(day, weatherName)
@@ -50,6 +87,48 @@ local function applyLighting(clock: number, weatherName: string)
 	Lighting.ColorShift_Bottom = merged.ColorShift_Bottom
 	Lighting.ShadowSoftness = merged.ShadowSoftness
 	Lighting.GlobalShadows = true
+
+	local atmos = ensureAtmosphere()
+	atmos.Density = merged.Density
+	atmos.Haze = merged.Haze
+	atmos.Glare = merged.Glare
+	atmos.Color = merged.AtmosphereColor
+	atmos.Decay = merged.AtmosphereDecay
+
+	local grade = ensureColorCorrection()
+	grade.Saturation = merged.Saturation
+	grade.Contrast = merged.Contrast
+	-- Lightning flashes read better with a brief exposure lift than a brightness spike alone.
+	grade.Brightness = EnvironmentLighting.lightningBoost * 0.02
+end
+
+--[[
+	One-time post-effect cleanup. These are not animated, so they are set once instead of
+	every frame:
+	  DepthOfField — was enabled with FarIntensity 0.75, blurring the distant map into mush.
+	    Disabled: this is a top-down-ish farming view where you read across your plots, and
+	    the shop UI already tweens Lighting.Blur for its own focus effect.
+	  Bloom — was Intensity 1 (Roblox default is 0.4). Against Brightness 2.6 at midday that
+	    blew out highlights and smeared the rare-crop glow instead of reading as sparkle.
+]]
+local function tunePostEffects()
+	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
+	if dof then
+		dof.Enabled = false
+	end
+
+	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+	if bloom then
+		bloom.Intensity = 0.5
+		bloom.Size = 20
+		bloom.Threshold = 1.8
+	end
+
+	local sunRays = Lighting:FindFirstChildOfClass("SunRaysEffect")
+	if sunRays then
+		sunRays.Intensity = 0.1
+		sunRays.Spread = 0.55
+	end
 end
 
 -- ------------------------------------------------------------------ HUD
@@ -323,6 +402,7 @@ local function refreshWeatherFromAttribute()
 end
 
 refreshWeatherFromAttribute()
+tunePostEffects()
 targetClock = getServerClock()
 displayClock = targetClock
 

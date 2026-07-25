@@ -1,8 +1,10 @@
 --[[
 	PetMenuClient — "My Pets" panel replacing the old backpack pet tools.
 
-	A paw HUD button toggles a procedural panel listing every owned pet;
-	clicking a row's button equips that pet (it flies beside you) or
+	Opened via the "My Pets" button in the left menu bar (MenuBarClient),
+	which toggles Panel.Visible directly and fires a refresh — no separate
+	HUD toggle button here anymore (that duplicated the left-bar button).
+	Clicking a row's button equips that pet (it flies beside you) or
 	unequips the currently active one. State comes from PetService's
 	PetMenu remote, so the list is always server-truth.
 ]]
@@ -57,33 +59,12 @@ local function buildUi()
 	gui.DisplayOrder = 9
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	-- HUD toggle button
-	local toggle = Instance.new("TextButton")
-	toggle.Name = "PetMenuToggle"
-	toggle.AnchorPoint = Vector2.new(1, 0.5)
-	toggle.Position = UDim2.new(1, -12, 0.42, 0)
-	toggle.Size = UDim2.fromOffset(52, 52)
-	toggle.BackgroundColor3 = COLORS.panel
-	toggle.BackgroundTransparency = 0.15
-	toggle.Text = "🐾"
-	toggle.TextSize = 26
-	toggle.Font = Enum.Font.GothamBold
-	toggle.TextColor3 = COLORS.text
-	toggle.Parent = gui
-	corner(toggle, 14)
-
-	local toggleStroke = Instance.new("UIStroke")
-	toggleStroke.Color = Color3.fromRGB(15, 17, 22)
-	toggleStroke.Thickness = 1.5
-	toggleStroke.Transparency = 0.35
-	toggleStroke.Parent = toggle
-
-	-- Panel
+	-- Panel — centered like the other menu-bar panels (Achievements, Daily Login, etc.)
 	panel = Instance.new("Frame")
 	panel.Name = "Panel"
-	panel.AnchorPoint = Vector2.new(1, 0.5)
-	panel.Position = UDim2.new(1, -74, 0.42, 0)
-	panel.Size = UDim2.fromOffset(330, 360)
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = UDim2.fromScale(0.5, 0.5)
+	panel.Size = UDim2.fromOffset(380, 410)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.BackgroundTransparency = 0.05
 	panel.Visible = false
@@ -97,7 +78,7 @@ local function buildUi()
 	stroke.Parent = panel
 
 	headerLabel = Instance.new("TextLabel")
-	headerLabel.Size = UDim2.new(1, -24, 0, 40)
+	headerLabel.Size = UDim2.new(1, -24, 0, 44)
 	headerLabel.Position = UDim2.fromOffset(14, 4)
 	headerLabel.BackgroundTransparency = 1
 	headerLabel.Text = "🐾 My Pets"
@@ -110,8 +91,8 @@ local function buildUi()
 
 	listFrame = Instance.new("ScrollingFrame")
 	listFrame.Name = "List"
-	listFrame.Position = UDim2.fromOffset(10, 46)
-	listFrame.Size = UDim2.new(1, -20, 1, -56)
+	listFrame.Position = UDim2.fromOffset(10, 50)
+	listFrame.Size = UDim2.new(1, -20, 1, -60)
 	listFrame.BackgroundTransparency = 1
 	listFrame.BorderSizePixel = 0
 	listFrame.ScrollBarThickness = 4
@@ -123,19 +104,12 @@ local function buildUi()
 	layout.Padding = UDim.new(0, 6)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = listFrame
-
-	toggle.MouseButton1Click:Connect(function()
-		panel.Visible = not panel.Visible
-		if panel.Visible then
-			petMenu:FireServer("refresh")
-		end
-	end)
 end
 
 local function buildRow(pet, layoutOrder: number): Frame
 	local row = Instance.new("Frame")
 	row.Name = pet.id
-	row.Size = UDim2.new(1, -6, 0, 62)
+	row.Size = UDim2.new(1, -6, 0, 68)
 	row.BackgroundColor3 = pet.equipped and COLORS.rowEquipped or COLORS.row
 	row.LayoutOrder = layoutOrder
 	corner(row, 10)
@@ -157,7 +131,7 @@ local function buildRow(pet, layoutOrder: number): Frame
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 16
+	title.TextSize = 17
 	title.Parent = row
 
 	local details = Instance.new("TextLabel")
@@ -172,18 +146,18 @@ local function buildRow(pet, layoutOrder: number): Frame
 	details.TextColor3 = COLORS.subtext
 	details.TextXAlignment = Enum.TextXAlignment.Left
 	details.Font = Enum.Font.Gotham
-	details.TextSize = 13
+	details.TextSize = 14
 	details.Parent = row
 
 	local button = Instance.new("TextButton")
 	button.AnchorPoint = Vector2.new(1, 0.5)
 	button.Position = UDim2.new(1, -10, 0.5, 0)
-	button.Size = UDim2.fromOffset(84, 30)
+	button.Size = UDim2.fromOffset(90, 32)
 	button.BackgroundColor3 = pet.equipped and COLORS.neutral or COLORS.accent
 	button.Text = pet.equipped and "Unequip" or "Equip"
 	button.TextColor3 = COLORS.text
 	button.Font = Enum.Font.GothamBold
-	button.TextSize = 14
+	button.TextSize = 15
 	button.Parent = row
 	corner(button, 8)
 
@@ -210,7 +184,7 @@ local function renderState(pets)
 
 	if #pets == 0 then
 		local empty = Instance.new("Frame")
-		empty.Size = UDim2.new(1, -6, 0, 62)
+		empty.Size = UDim2.new(1, -6, 0, 68)
 		empty.BackgroundTransparency = 1
 		empty.Parent = listFrame
 

@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local orderRemote = remotes:WaitForChild("OrderBoard")
+local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
 
 local COLORS = {
 	panel = Color3.fromRGB(25, 28, 36),
@@ -53,7 +54,7 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(420, 330)
+	panel.Size = UDim2.fromOffset(480, 380)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.BackgroundTransparency = 0.05
 	panel.Parent = gui
@@ -67,14 +68,14 @@ local function buildPanel()
 
 	headerLabel = Instance.new("TextLabel")
 	headerLabel.Name = "Header"
-	headerLabel.Size = UDim2.new(1, -60, 0, 44)
-	headerLabel.Position = UDim2.fromOffset(16, 4)
+	headerLabel.Size = UDim2.new(1, -60, 0, 48)
+	headerLabel.Position = UDim2.fromOffset(18, 6)
 	headerLabel.BackgroundTransparency = 1
 	headerLabel.Text = "📋 Order Board"
 	headerLabel.TextColor3 = COLORS.text
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	headerLabel.Font = Enum.Font.GothamBold
-	headerLabel.TextSize = 22
+	headerLabel.TextSize = 24
 	headerLabel.Parent = panel
 
 	local closeButton = Instance.new("TextButton")
@@ -83,20 +84,18 @@ local function buildPanel()
 	closeButton.Position = UDim2.new(1, -10, 0, 10)
 	closeButton.Size = UDim2.fromOffset(32, 32)
 	closeButton.BackgroundColor3 = COLORS.close
-	closeButton.Text = "✕"
-	closeButton.TextColor3 = COLORS.text
-	closeButton.Font = Enum.Font.GothamBold
-	closeButton.TextSize = 16
+	closeButton.Text = ""
 	closeButton.Parent = panel
 	corner(closeButton, 8)
+	CloseIconUi.build(closeButton, { color = COLORS.text })
 	closeButton.MouseButton1Click:Connect(function()
 		gui.Enabled = false
 	end)
 
 	rowsFolder = Instance.new("Frame")
 	rowsFolder.Name = "Rows"
-	rowsFolder.Position = UDim2.fromOffset(12, 52)
-	rowsFolder.Size = UDim2.new(1, -24, 1, -96)
+	rowsFolder.Position = UDim2.fromOffset(14, 58)
+	rowsFolder.Size = UDim2.new(1, -28, 1, -106)
 	rowsFolder.BackgroundTransparency = 1
 	rowsFolder.Parent = panel
 
@@ -126,7 +125,7 @@ local function buildRow(order, layoutOrder: number): Frame
 
 	local row = Instance.new("Frame")
 	row.Name = order.id
-	row.Size = UDim2.new(1, 0, 0, 72)
+	row.Size = UDim2.new(1, 0, 0, 80)
 	row.BackgroundColor3 = ready and COLORS.rowReady or COLORS.row
 	row.LayoutOrder = layoutOrder
 	corner(row, 10)
@@ -141,7 +140,7 @@ local function buildRow(order, layoutOrder: number): Frame
 	title.TextColor3 = COLORS.text
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 17
+	title.TextSize = 18
 	title.Parent = row
 
 	local progress = Instance.new("TextLabel")
@@ -152,7 +151,7 @@ local function buildRow(order, layoutOrder: number): Frame
 	progress.TextColor3 = ready and COLORS.accent or COLORS.subtext
 	progress.TextXAlignment = Enum.TextXAlignment.Left
 	progress.Font = Enum.Font.Gotham
-	progress.TextSize = 14
+	progress.TextSize = 15
 	progress.Parent = row
 
 	local reward = Instance.new("TextLabel")
@@ -164,18 +163,18 @@ local function buildRow(order, layoutOrder: number): Frame
 	reward.TextColor3 = COLORS.reward
 	reward.TextXAlignment = Enum.TextXAlignment.Right
 	reward.Font = Enum.Font.GothamBold
-	reward.TextSize = 17
+	reward.TextSize = 18
 	reward.Parent = row
 
 	local deliverButton = Instance.new("TextButton")
 	deliverButton.AnchorPoint = Vector2.new(1, 1)
 	deliverButton.Position = UDim2.new(1, -12, 1, -8)
-	deliverButton.Size = UDim2.fromOffset(96, 28)
+	deliverButton.Size = UDim2.fromOffset(106, 32)
 	deliverButton.BackgroundColor3 = ready and COLORS.accent or COLORS.accentDisabled
 	deliverButton.Text = "Deliver"
 	deliverButton.TextColor3 = COLORS.text
 	deliverButton.Font = Enum.Font.GothamBold
-	deliverButton.TextSize = 15
+	deliverButton.TextSize = 16
 	deliverButton.AutoButtonColor = ready
 	deliverButton.Parent = row
 	corner(deliverButton, 8)

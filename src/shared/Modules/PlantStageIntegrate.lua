@@ -47,6 +47,30 @@ end
 
 export type MeshFilter = (mesh: MeshPart) -> boolean
 
+-- Clone EVERY MeshPart of a stage's source model with that stage's appear/hide window.
+-- No MeshId dedup and no harvest exclusion: a growing plant legitimately reuses the same
+-- mesh assets across stages, so deduping collapses distinct stages into one (the old bug
+-- where "seed / growing / mature all use the same mesh"). Each stage owns its full geometry
+-- and swaps cleanly at the window boundary.
+function PlantStageIntegrate.addStageMeshesFull(clientModel: Model, sourceModel: Model, stage: StageDef): number
+	local groundOffset = PlantStageIntegrate.getModelGroundOffset(sourceModel)
+	local added = 0
+	for _, mesh in sourceModel:GetDescendants() do
+		if mesh:IsA("MeshPart") then
+			local clone = mesh:Clone()
+			clone.Name = stage.meshTag .. "_" .. mesh.Name
+			clone.CFrame = mesh.CFrame - groundOffset
+			clone.Anchored = true
+			clone.CanCollide = false
+			clone.CastShadow = false
+			applyStageAttributes(clone, stage)
+			clone.Parent = clientModel
+			added += 1
+		end
+	end
+	return added
+end
+
 function PlantStageIntegrate.addEarlyStageMeshes(
 	clientModel: Model,
 	sourceModel: Model,

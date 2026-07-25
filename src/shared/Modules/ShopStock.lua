@@ -24,13 +24,17 @@ ShopStock.APPEAR_CHANCE_BY_RARITY = {
 	Prismatic = 1,
 }
 
+-- Legendary/Mythical raised to 5-10: with no earned/stat gate left (see CropTierConfig),
+-- price is now the only thing keeping high tiers from being bought immediately, so a
+-- Legendary/Mythical crop that DOES appear should have enough stock to actually be useful
+-- rather than selling out after 1-2 purchases.
 ShopStock.SEED_STOCK_RANGE = {
 	Common = { Min = 15, Max = 25 },
 	Uncommon = { Min = 10, Max = 20 },
 	Rare = { Min = 5, Max = 15 },
 	Epic = { Min = 3, Max = 8 },
-	Legendary = { Min = 1, Max = 3 },
-	Mythical = { Min = 1, Max = 2 },
+	Legendary = { Min = 5, Max = 10 },
+	Mythical = { Min = 5, Max = 10 },
 	Divine = { Min = 1, Max = 1 },
 	Prismatic = { Min = 1, Max = 1 },
 }

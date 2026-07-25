@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "weppy-roblox-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@weppy/roblox-mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "query_instances",
+        "manage_selection",
+        "system_info"
+      ]
+    }
+  }
+}

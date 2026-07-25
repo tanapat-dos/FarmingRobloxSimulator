@@ -3,6 +3,7 @@ local EconomyBalance = require(game:GetService("ReplicatedStorage"):WaitForChild
 local template = {
 	Cash = EconomyBalance.STARTING_CASH,
 	Diamonds = 0, -- premium currency (bought with Robux, spent on Legendary eggs)
+	FishCoins = 0, -- earned from fishing catches, spent in the Fish Coin Shop
 	Inventory = {},
 	PlotData = {},
 	OwnedPets = {},

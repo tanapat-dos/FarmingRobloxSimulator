@@ -46,17 +46,14 @@ function NavigationHudState.applyToPlayerGui(playerGui: Instance)
 		end
 	end
 
+	-- PetMenuGui no longer has its own toggle button (opened via the left
+	-- menu bar's "My Pets" button instead) — just force-close the panel
+	-- when the HUD is hidden.
 	local petMenu = playerGui:FindFirstChild("PetMenuGui")
-	if petMenu then
-		local toggle = petMenu:FindFirstChild("PetMenuToggle")
-		if toggle and toggle:IsA("GuiObject") then
-			toggle.Visible = NavigationHudState.visible
-		end
-		if not NavigationHudState.visible then
-			local panel = petMenu:FindFirstChild("Panel")
-			if panel and panel:IsA("GuiObject") then
-				panel.Visible = false
-			end
+	if petMenu and not NavigationHudState.visible then
+		local panel = petMenu:FindFirstChild("Panel")
+		if panel and panel:IsA("GuiObject") then
+			panel.Visible = false
 		end
 	end
 end

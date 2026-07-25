@@ -17,6 +17,7 @@ local modules = ReplicatedStorage:WaitForChild("Modules")
 
 local EconomyBalance = require(modules.EconomyBalance)
 local Monetization = require(modules.Monetization)
+local CloseIconUi = require(modules.CloseIconUi)
 
 local legendaryRemote = remotes:WaitForChild("LegendaryEgg")
 local petRollResult = remotes:WaitForChild("PetRollResult")
@@ -102,7 +103,7 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(440, 500)
+	panel.Size = UDim2.fromOffset(500, 560)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.Parent = gui
 	corner(panel, 20)
@@ -117,7 +118,7 @@ local function buildPanel()
 	header.TextColor3 = COLORS.legendary
 	header.TextXAlignment = Enum.TextXAlignment.Left
 	header.Font = Enum.Font.GothamBold
-	header.TextSize = 26
+	header.TextSize = 28
 	header.Parent = panel
 
 	local closeButton = Instance.new("TextButton")
@@ -125,12 +126,10 @@ local function buildPanel()
 	closeButton.Position = UDim2.new(1, -14, 0, 14)
 	closeButton.Size = UDim2.fromOffset(38, 38)
 	closeButton.BackgroundColor3 = COLORS.close
-	closeButton.Text = "✕"
-	closeButton.TextColor3 = COLORS.text
-	closeButton.Font = Enum.Font.GothamBold
-	closeButton.TextSize = 18
+	closeButton.Text = ""
 	closeButton.Parent = panel
 	corner(closeButton, 10)
+	CloseIconUi.build(closeButton, { color = COLORS.text })
 	closeButton.MouseButton1Click:Connect(function()
 		if gui then
 			gui.Enabled = false
@@ -152,8 +151,8 @@ local function buildPanel()
 
 	-- Egg card
 	local card = Instance.new("Frame")
-	card.Position = UDim2.fromOffset(22, 74)
-	card.Size = UDim2.new(1, -44, 0, 300)
+	card.Position = UDim2.fromOffset(25, 82)
+	card.Size = UDim2.new(1, -50, 0, 340)
 	card.BackgroundColor3 = COLORS.card
 	card.Parent = panel
 	corner(card, 16)
@@ -162,7 +161,7 @@ local function buildPanel()
 	local badge = Instance.new("Frame")
 	badge.AnchorPoint = Vector2.new(0.5, 0)
 	badge.Position = UDim2.fromScale(0.5, 0.06)
-	badge.Size = UDim2.fromOffset(140, 140)
+	badge.Size = UDim2.fromOffset(158, 158)
 	badge.BackgroundColor3 = COLORS.roll
 	badge.Parent = card
 	corner(badge, 70)
@@ -174,7 +173,7 @@ local function buildPanel()
 	icon.Text = "🥚"
 	icon.TextColor3 = COLORS.text
 	icon.Font = Enum.Font.GothamBold
-	icon.TextSize = 76
+	icon.TextSize = 86
 	icon.Parent = badge
 
 	local rarity = Instance.new("TextLabel")
@@ -185,7 +184,7 @@ local function buildPanel()
 	rarity.Text = "LEGENDARY"
 	rarity.TextColor3 = COLORS.legendary
 	rarity.Font = Enum.Font.GothamBold
-	rarity.TextSize = 20
+	rarity.TextSize = 22
 	rarity.Parent = card
 
 	local nameLabel = Instance.new("TextLabel")
@@ -196,7 +195,7 @@ local function buildPanel()
 	nameLabel.Text = LEGENDARY_EGG
 	nameLabel.TextColor3 = COLORS.text
 	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 22
+	nameLabel.TextSize = 24
 	nameLabel.Parent = card
 
 	local boost = Instance.new("TextLabel")
@@ -207,18 +206,18 @@ local function buildPanel()
 	boost.Text = ("Cash Boost %s  •  Divine pets"):format(BOOST_TEXT)
 	boost.TextColor3 = COLORS.subtext
 	boost.Font = Enum.Font.GothamMedium
-	boost.TextSize = 15
+	boost.TextSize = 16
 	boost.Parent = card
 
 	-- Roll button
 	local rollButton = Instance.new("TextButton")
-	rollButton.Position = UDim2.fromOffset(22, 388)
-	rollButton.Size = UDim2.new(1, -44, 0, 50)
+	rollButton.Position = UDim2.fromOffset(25, 434)
+	rollButton.Size = UDim2.new(1, -50, 0, 56)
 	rollButton.BackgroundColor3 = COLORS.roll
 	rollButton.Text = ("Roll  •  💎 %d"):format(DIAMOND_COST)
 	rollButton.TextColor3 = COLORS.text
 	rollButton.Font = Enum.Font.GothamBold
-	rollButton.TextSize = 20
+	rollButton.TextSize = 22
 	rollButton.Parent = panel
 	corner(rollButton, 12)
 	stroke(rollButton, COLORS.rollDark, 2, 0.1)
@@ -235,13 +234,13 @@ local function buildPanel()
 
 	-- Get diamonds button
 	local buyButton = Instance.new("TextButton")
-	buyButton.Position = UDim2.fromOffset(22, 444)
-	buyButton.Size = UDim2.new(1, -44, 0, 34)
+	buyButton.Position = UDim2.fromOffset(25, 498)
+	buyButton.Size = UDim2.new(1, -50, 0, 38)
 	buyButton.BackgroundColor3 = COLORS.buy
 	buyButton.Text = "＋ Get Diamonds  (100💎 · $0.99)"
 	buyButton.TextColor3 = COLORS.text
 	buyButton.Font = Enum.Font.GothamBold
-	buyButton.TextSize = 15
+	buyButton.TextSize = 16
 	buyButton.Parent = panel
 	corner(buyButton, 10)
 	buyButton.MouseButton1Click:Connect(promptBuyDiamonds)

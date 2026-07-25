@@ -132,6 +132,15 @@ local function awardCatch(player: Player, session: FishingSession)
 	end
 	local paid = moneyService.giveMoney(player, payout)
 
+	-- Fish Coins: secondary currency for the Fish Coin Shop, scaled off the
+	-- same base fish value (not the cash-boosted payout) so friend/pet/rebirth
+	-- multipliers don't inflate it.
+	local coinPayout = math.ceil(fish.value / 10)
+	if perfect then
+		coinPayout = math.ceil(coinPayout * FishingConfig.MINIGAME.PERFECT_PAYOUT_MULTIPLIER)
+	end
+	local coinsAwarded = moneyService.giveFishCoins(player, coinPayout)
+
 	local data = dataService.getData(player)
 	if data then
 		data.FishingStats = data.FishingStats or { TotalCaught = 0, PerfectCasts = 0 }
@@ -142,8 +151,8 @@ local function awardCatch(player: Player, session: FishingSession)
 	end
 
 	local msg = if perfect
-		then `Perfect reel! Caught a {fish.displayName} (+${paid})`
-		else `Caught a {fish.displayName} (+${paid})`
+		then `Perfect reel! Caught a {fish.displayName} (+${paid}, +🐟{coinsAwarded})`
+		else `Caught a {fish.displayName} (+${paid}, +🐟{coinsAwarded})`
 
 	fishingRemote:FireClient(player, "result", {
 		success = true,
@@ -151,6 +160,7 @@ local function awardCatch(player: Player, session: FishingSession)
 		fishId = fish.id,
 		fishName = fish.displayName,
 		reward = paid,
+		fishCoins = coinsAwarded,
 		msg = msg,
 	})
 	notify(player, msg, "success")

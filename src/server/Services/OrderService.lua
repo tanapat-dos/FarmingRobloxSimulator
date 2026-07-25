@@ -38,10 +38,50 @@ local random = Random.new()
 
 local ORDER_SLOTS = 3
 local REFRESH_SECONDS = 300 -- full board refresh cadence per player
--- Expected fruit value ~= baseValue * E[weight^2] (~3 with the current
--- size roll); the bonus makes orders clearly better than bulk selling.
-local EXPECTED_WEIGHT_SQ = 3
-local ORDER_BONUS = 1.7
+
+-- Expected sell value of one fruit is
+--   baseValue * E[weight^2] * E[mutation] * rarityAvg(tier)
+-- The old formula used only E[weight^2] and a 1.7x "bonus", omitting the 2.43x mutation
+-- expectation entirely — so orders paid ~5.1x baseValue while selling averaged ~7.85x,
+-- making the "premium" order board strictly worse than bulk selling.
+--
+-- Now orders pay the full expected value with a deliberate discount: they are the reliable,
+-- zero-variance floor, while selling stays the high-variance play where mutations pay off.
+local ORDER_PAYOUT_RATIO = 0.85
+
+-- Matches SeedShopService.getRandomFruitSize: w = a + b * r^2.2, E[r^k] = 1/(k+1)
+local function expectedWeightSq(a: number, b: number): number
+	return a * a + 2 * a * b * (1 / 3.2) + b * b * (1 / 5.4)
+end
+
+local E_W2_STANDARD = expectedWeightSq(1, 2) -- ~2.99
+local E_W2_MANGO = expectedWeightSq(0.75, 1.1) -- ~1.30 (reduced roll, perennial)
+
+-- MutationService: 1% Rainbow (x50), then 5% Golden (x20) of the remaining 99%
+local E_MUTATION = 0.01 * 50 + (0.99 * 0.05) * 20 + (1 - 0.01 - 0.99 * 0.05) * 1
+
+-- Average harvest-quality multiplier for a crop of the given tier.
+local rarityAvgCache: { [string]: number } = {}
+local function rarityAvgForTier(tier: string?): number
+	if not tier then
+		return 1
+	end
+	if rarityAvgCache[tier] then
+		return rarityAvgCache[tier]
+	end
+	local bias = HarvestRarityConfig.CROP_BIAS[tier]
+	if not bias then
+		return 1
+	end
+	local sum, weight = 0, 0
+	for quality, pct in bias do
+		sum += pct * HarvestRarityConfig.getMultiplier(quality)
+		weight += pct
+	end
+	local avg = if weight > 0 then sum / weight else 1
+	rarityAvgCache[tier] = avg
+	return avg
+end
 
 local RARITY_ASKS = {
 	{ minRarity = nil, weight = 60, rewardMult = 1 },
@@ -77,15 +117,23 @@ local function getCropPool()
 	cropPool = {}
 	local totalWeight = 0
 	for seedName, cfg in EconomyBalance.CROPS do
-		-- Cheaper crops appear more often; every crop stays possible.
-		local weight = 1000 / (cfg.price + 25)
-		totalWeight += weight
-		table.insert(cropPool, {
-			fruitName = seedName:gsub(" Seed$", ""),
-			baseValue = cfg.baseValue,
-			price = cfg.price,
-			weight = weight,
-		})
+		-- Crops with no cash price are bought with another currency (Crystal Blooms uses
+		-- Fish Coins). Skip them: `1000 / (0 + 25)` would make them the most common ask,
+		-- and they are the hardest crop in the game to obtain.
+		if (cfg.price or 0) > 0 then
+			-- Cheaper crops appear more often; every crop stays possible.
+			local weight = 1000 / (cfg.price + 25)
+			totalWeight += weight
+			table.insert(cropPool, {
+				fruitName = seedName:gsub(" Seed$", ""),
+				baseValue = cfg.baseValue,
+				price = cfg.price,
+				tier = cfg.rarity,
+				-- Perennials use a reduced size roll, so their fruits are worth less each.
+				expectedWeightSq = if cfg.multiHarvest then E_W2_MANGO else E_W2_STANDARD,
+				weight = weight,
+			})
+		end
 	end
 	cropPool.totalWeight = totalWeight
 	return cropPool
@@ -107,17 +155,25 @@ local function generateOrder()
 	local crop = pickWeighted(pool, pool.totalWeight)
 
 	local ask = pickWeighted(RARITY_ASKS, 100)
-	-- Pricey crops ask for fewer fruits
-	local count
-	if crop.price <= 40 then
-		count = random:NextInteger(3, 5)
-	elseif crop.price <= 130 then
-		count = random:NextInteger(2, 4)
-	else
-		count = random:NextInteger(1, 2)
-	end
 
-	local reward = crop.baseValue * EXPECTED_WEIGHT_SQ * count * ORDER_BONUS * ask.rewardMult
+	-- Higher tiers ask for fewer fruits, since each one takes much longer to grow.
+	-- Keyed on tier rather than price so re-pricing crops can't silently change ask sizes.
+	local COUNT_BY_TIER = {
+		Common = { 3, 5 },
+		Uncommon = { 2, 4 },
+		Rare = { 2, 3 },
+		Epic = { 1, 3 },
+		Legendary = { 1, 2 },
+		Mythical = { 1, 2 },
+	}
+	local range = COUNT_BY_TIER[crop.tier] or { 1, 2 }
+	local count = random:NextInteger(range[1], range[2])
+
+	local perFruit = crop.baseValue
+		* crop.expectedWeightSq
+		* E_MUTATION
+		* rarityAvgForTier(crop.tier)
+	local reward = perFruit * count * ORDER_PAYOUT_RATIO * ask.rewardMult
 	reward = math.ceil(reward / 5) * 5
 
 	return {

@@ -25,14 +25,17 @@ EconomyBalance.DAILY_LOGIN_REWARDS = {
 
 -- Plot progression: every garden has 8 physical soil beds; bed 1 is free,
 -- beds 2..maxOwned are purchasable in order, the rest stay reserved.
--- Rescaled to use all 8 physical beds with a steep exponential curve —
--- unlocking the last plot is a genuine late-game milestone, not a Day 1 buy.
+-- Cumulative cost of all 7 purchasable beds: $4.5M. Together with the growth upgrades
+-- (~$6.06M) that is ~$10.6M of sinks, tuned to complete in roughly 2-3 days of engaged play
+-- and to land just before the $15M-earned Mythical unlock — so permanent upgrades finish as
+-- the top crop tier opens rather than leaving the player with nothing to buy.
+-- Bed 2 stays cheap so the first expansion is still a first-session goal.
 EconomyBalance.PLOTS = {
 	startOwned = 1,
 	maxOwned = 8,
 	cropsPerPlot = 10,
 	-- prices[n] = cost of the nth bed (index 1 is the free starter bed)
-	prices = { 0, 5000, 20000, 60000, 150000, 350000, 750000, 1500000 },
+	prices = { 0, 5000, 20000, 75000, 200000, 500000, 1200000, 2500000 },
 }
 
 -- Mature crop height in the garden (studs at plantSize 1), after per-crop mesh normalization.
@@ -43,7 +46,6 @@ EconomyBalance.PLANT_DISPLAY = {
 	-- Optional per-crop mature height target (studs at plantSize 1).
 	cropTargetHeightStuds = {
 		Carrot = 3.8,
-		Radish = 3.8,
 		Wheat = 4.2,
 		Lettuce = 3.6,
 	},
@@ -68,20 +70,19 @@ EconomyBalance.PLANT_DISPLAY = {
 -- Garden upgrades purchased from the Upgrade Board (server authoritative).
 -- GrowthReduction: leveled, permanent % off crop grow time. levels[n] is the
 -- state AT level n (pct = total reduction, price = cost to go from n-1 -> n).
--- Rescaled to 8 levels with a much steeper curve: maxing out now costs
--- ~$2.9M cumulative (vs. ~$180k before), so it's a long-term grind rather
--- than something a player finishes in one or two sessions.
+-- Maxing all 8 levels costs $6.06M cumulative. Paired with the plot beds ($4.5M) this is
+-- ~$10.6M of sinks, targeted at roughly 2-3 days of engaged play to complete.
 EconomyBalance.UPGRADES = {
 	GrowthReduction = {
 		levels = {
 			{ pct = 5,  price = 8000 },
 			{ pct = 10, price = 25000 },
-			{ pct = 15, price = 70000 },
-			{ pct = 20, price = 160000 },
-			{ pct = 25, price = 350000 },
-			{ pct = 30, price = 650000 },
-			{ pct = 35, price = 1100000 },
-			{ pct = 40, price = 1800000 },
+			{ pct = 15, price = 80000 },
+			{ pct = 20, price = 200000 },
+			{ pct = 25, price = 450000 },
+			{ pct = 30, price = 900000 },
+			{ pct = 35, price = 1600000 },
+			{ pct = 40, price = 2800000 },
 		},
 	},
 }
@@ -204,31 +205,82 @@ EconomyBalance.EGGS = {
 	["Divine Egg"] = { cost = 120000, rarity = "Legendary", currency = "Diamonds", diamondCost = 100 },
 }
 
--- BaseValue drives sell price via GetFruitValue (baseValue * weight^2 * mutations * rarity).
--- Price and GrowthTime increase per tier; ROI improves slowly to reward progression.
+-- BaseValue drives sell price via GetFruitValue:
+--   revenue = baseValue * weight^2 * mutations * rarity
+--
+-- Every value below is derived, not hand-picked. With E[weight^2] = 2.99 (from the
+-- `1 + r^2.2 * 2` size roll), E[mutation] = 2.43 (1% Rainbow x50, ~4.95% Golden x20) and
+-- the per-tier harvest-quality average from HarvestRarityConfig.CROP_BIAS, the expected
+-- revenue per baseValue point is M(tier):
+--
+--   Common 7.85 | Uncommon 8.46 | Rare 9.42 | Epic 10.34 | Legendary 11.81 | Mythical 12.99
+--
+-- Each crop satisfies `baseValue * M = 2 * price`, so a cycle returns ~2x the seed cost, and
+-- growthTime rises more slowly than value so profit per slot-hour roughly DOUBLES per tier:
+--
+--   Common $600 | Uncommon $1.2K | Rare $2.5K | Epic $5K | Legendary $10K | Mythical $20K
+--
+-- Verify with tools/VerifyEconomyMath.lua after any edit here.
+--
+-- `rarity` is both the shop-stock tier and the unlock tier (see CropTierConfig).
+--
+-- IMPORTANT: SeedData (ReplicatedStorage.Modules.SeedData, an instance tree) is what the
+-- game actually reads at runtime. Editing this table alone changes nothing — run
+-- tools/MigrateSeedDataEconomy.lua to push these values into SeedData.
 EconomyBalance.CROPS = {
-	["Carrot Seed"] = { price = 30, baseValue = 2, growthTime = 180, rarity = "Common" },
-	["Radish Seed"] = { price = 40, baseValue = 2, growthTime = 180, rarity = "Common" },
-	["Wheat Seed"] = { price = 50, baseValue = 2, growthTime = 240, rarity = "Common" },
-	["Lettuce Seed"] = { price = 60, baseValue = 3, growthTime = 270, rarity = "Common" },
-	["Potato Seed"] = { price = 70, baseValue = 3, growthTime = 300, rarity = "Common" },
-	["Beetroot Seed"] = { price = 80, baseValue = 3, growthTime = 330, rarity = "Common" },
-	["Tomato Seed"] = { price = 110, baseValue = 4, growthTime = 360, rarity = "Uncommon" },
-	["Garlic Seed"] = { price = 130, baseValue = 5, growthTime = 420, rarity = "Uncommon" },
-	["Corn Seed"] = { price = 160, baseValue = 6, growthTime = 480, rarity = "Uncommon" },
-	["Strawberry Seed"] = { price = 200, baseValue = 8, growthTime = 420, rarity = "Uncommon" },
-	["Pepper Seed"] = { price = 260, baseValue = 10, growthTime = 540, rarity = "Uncommon" },
-	["Pumpkin Seed"] = { price = 360, baseValue = 14, growthTime = 660, rarity = "Rare" },
-	["Grape Seed"] = { price = 500, baseValue = 20, growthTime = 780, rarity = "Rare" },
-	["Eggplant Seed"] = { price = 700, baseValue = 28, growthTime = 900, rarity = "Rare" },
-	["Pineapple Seed"] = { price = 1000, baseValue = 40, growthTime = 1200, rarity = "Epic" },
-	["Bubble Rash Seed"] = { price = 1200, baseValue = 48, growthTime = 1350, rarity = "Epic" },
-	["Crystal Blooms Seed"] = { price = 1300, baseValue = 50, growthTime = 1400, rarity = "Epic" },
+	-- Common — no unlock gate
+	["Carrot Seed"] = { price = 25, baseValue = 6.4, growthTime = 150, rarity = "Common" },
+	["Wheat Seed"] = { price = 35, baseValue = 8.9, growthTime = 210, rarity = "Common" },
+
+	-- Uncommon — no unlock gate
+	["Lettuce Seed"] = { price = 90, baseValue = 21.3, growthTime = 270, rarity = "Uncommon" },
+	["Potato Seed"] = { price = 100, baseValue = 23.6, growthTime = 300, rarity = "Uncommon" },
+	["Beetroot Seed"] = { price = 110, baseValue = 26, growthTime = 330, rarity = "Uncommon" },
+
+	-- Rare — $25K earned
+	["Tomato Seed"] = { price = 270, baseValue = 57.3, growthTime = 390, rarity = "Rare" },
+	["Garlic Seed"] = { price = 290, baseValue = 61.6, growthTime = 420, rarity = "Rare" },
+	["Corn Seed"] = { price = 315, baseValue = 66.9, growthTime = 450, rarity = "Rare" },
+
+	-- Epic — $250K earned + 3 plots
+	["Strawberry Seed"] = { price = 750, baseValue = 145.2, growthTime = 540, rarity = "Epic" },
+	["Pepper Seed"] = { price = 840, baseValue = 162.6, growthTime = 600, rarity = "Epic" },
+	["Pumpkin Seed"] = { price = 920, baseValue = 178.1, growthTime = 660, rarity = "Epic" },
+
+	-- Legendary — $2M earned + 500 fruits harvested
+	["Grape Seed"] = { price = 2350, baseValue = 398, growthTime = 840, rarity = "Legendary" },
+	["Eggplant Seed"] = { price = 2500, baseValue = 423.4, growthTime = 900, rarity = "Legendary" },
+	["Pineapple Seed"] = { price = 2670, baseValue = 452.2, growthTime = 960, rarity = "Legendary" },
+
+	-- Mythical — $15M earned + 10 mutations found
+	["Candy Vine Seed"] = { price = 5650, baseValue = 869.7, growthTime = 1020, rarity = "Mythical" },
+	["Red Mushroom Seed"] = { price = 6000, baseValue = 923.6, growthTime = 1080, rarity = "Mythical" },
+	["Bubble Rash Seed"] = { price = 6350, baseValue = 977.7, growthTime = 1140, rarity = "Mythical" },
+
+	-- Apex crop. Bought with Fish Coins (see FishCoinShopService), so `price = 0` here:
+	-- its entire output is profit, which is why it beats every cash crop at ~$39K/slot-hr.
+	-- Fish Coin supply is the throttle — steady fishing sustains only ~2-3 slots.
+	-- Highest baseValue in the game, so also the most valuable single fruit.
+	["Crystal Blooms Seed"] = {
+		price = 0,
+		fishCoinPrice = 150,
+		baseValue = 1000,
+		growthTime = 1200,
+		rarity = "Mythical",
+	},
+
+	-- The ONLY perennial. multiHarvest/harvestCount/harvestInterval are bound to fruit
+	-- attachment points on the mesh and MUST NOT be changed without new art.
+	-- 4 slots re-ripening every 600s = 24 fruits/hour forever, so seed cost amortises away
+	-- and the meaningful figures are the perpetual hourly rate and the payback period.
+	-- Mango also uses a reduced size roll (`0.75 + r^2.2 * 1.1`, E[weight^2] = 1.302), so its
+	-- per-fruit multiplier is 5.66 rather than 12.99.
+	-- baseValue 147 -> ~$20K/hr in perpetuity; $60K price -> ~3.0h payback.
 	["Mango Seed"] = {
-		price = 1600,
-		baseValue = 54,
-		growthTime = 1500,
-		rarity = "Epic",
+		price = 60000,
+		baseValue = 147,
+		growthTime = 1260,
+		rarity = "Mythical",
 		multiHarvest = true,
 		harvestCount = 4,
 		harvestInterval = 600,

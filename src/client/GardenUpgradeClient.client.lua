@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local upgradeRemote = remotes:WaitForChild("GardenUpgrade")
+local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
 
 local COLORS = {
 	panel = Color3.fromRGB(28, 32, 42),
@@ -108,7 +109,7 @@ local function buildCard(key: string)
 	levelLabel.Text = "Lv 0 / 0"
 	levelLabel.TextColor3 = COLORS.green
 	levelLabel.Font = Enum.Font.GothamBold
-	levelLabel.TextSize = 16
+	levelLabel.TextSize = 17
 	levelLabel.Parent = levelPill
 
 	-- Circular icon badge
@@ -116,7 +117,7 @@ local function buildCard(key: string)
 	badge.Name = "Badge"
 	badge.AnchorPoint = Vector2.new(0.5, 0)
 	badge.Position = UDim2.fromScale(0.5, 0.18)
-	badge.Size = UDim2.fromOffset(96, 96)
+	badge.Size = UDim2.fromOffset(108, 108)
 	badge.BackgroundColor3 = def.iconColor
 	badge.Parent = card
 	corner(badge, 48)
@@ -129,7 +130,7 @@ local function buildCard(key: string)
 	icon.Text = def.icon
 	icon.TextColor3 = COLORS.text
 	icon.Font = Enum.Font.GothamBold
-	icon.TextSize = 52
+	icon.TextSize = 58
 	icon.Parent = badge
 
 	-- Name
@@ -142,7 +143,7 @@ local function buildCard(key: string)
 	nameLabel.Text = def.name
 	nameLabel.TextColor3 = COLORS.text
 	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 22
+	nameLabel.TextSize = 24
 	nameLabel.Parent = card
 
 	-- Description
@@ -158,7 +159,7 @@ local function buildCard(key: string)
 	descLabel.TextYAlignment = Enum.TextYAlignment.Top
 	descLabel.TextColor3 = COLORS.subtext
 	descLabel.Font = Enum.Font.GothamMedium
-	descLabel.TextSize = 15
+	descLabel.TextSize = 16
 	descLabel.Parent = card
 
 	-- Buy button (bottom)
@@ -171,7 +172,7 @@ local function buildCard(key: string)
 	buyButton.Text = "Upgrade"
 	buyButton.TextColor3 = COLORS.text
 	buyButton.Font = Enum.Font.GothamBold
-	buyButton.TextSize = 18
+	buyButton.TextSize = 19
 	buyButton.Parent = card
 	corner(buyButton, 12)
 	stroke(buyButton, COLORS.greenDark, 2, 0.1)
@@ -206,7 +207,7 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(640, 480)
+	panel.Size = UDim2.fromOffset(720, 540)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.Parent = gui
 	corner(panel, 20)
@@ -235,7 +236,7 @@ local function buildPanel()
 	header.TextColor3 = COLORS.text
 	header.TextXAlignment = Enum.TextXAlignment.Left
 	header.Font = Enum.Font.GothamBold
-	header.TextSize = 26
+	header.TextSize = 28
 	header.Parent = headerBar
 
 	local closeButton = Instance.new("TextButton")
@@ -243,12 +244,10 @@ local function buildPanel()
 	closeButton.Position = UDim2.new(1, -14, 0.5, 0)
 	closeButton.Size = UDim2.fromOffset(38, 38)
 	closeButton.BackgroundColor3 = COLORS.close
-	closeButton.Text = "✕"
-	closeButton.TextColor3 = COLORS.text
-	closeButton.Font = Enum.Font.GothamBold
-	closeButton.TextSize = 18
+	closeButton.Text = ""
 	closeButton.Parent = headerBar
 	corner(closeButton, 10)
+	CloseIconUi.build(closeButton, { color = COLORS.text })
 	closeButton.MouseButton1Click:Connect(function()
 		if gui then
 			gui.Enabled = false
@@ -286,7 +285,7 @@ local function buildPanel()
 	statusLabel.RichText = true
 	statusLabel.TextColor3 = COLORS.subtext
 	statusLabel.Font = Enum.Font.GothamMedium
-	statusLabel.TextSize = 16
+	statusLabel.TextSize = 17
 	statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	statusLabel.Parent = panel
 end

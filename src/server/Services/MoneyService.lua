@@ -125,6 +125,11 @@ function Service.dataLoaded(player: Player)
 	diamonds.Value = profileData and profileData.Diamonds or 0
 	diamonds.Parent = leaderstats
 
+	local fishCoins = Instance.new("IntValue")
+	fishCoins.Name = "FishCoins"
+	fishCoins.Value = profileData and profileData.FishCoins or 0
+	fishCoins.Parent = leaderstats
+
 	leaderstats.Parent = player
 	player:SetAttribute("FriendBoost", 1)
 	player:SetAttribute("PetBoost", 1)
@@ -132,6 +137,7 @@ function Service.dataLoaded(player: Player)
 	player:SetAttribute("Rebirths", profileData and profileData.Rebirths or 0)
 	Service.updateCashCount(player)
 	Service.updateDiamondCount(player)
+	Service.updateFishCoinsCount(player)
 	updateFriendBoost(player)
 end
 
@@ -182,6 +188,59 @@ function Service.removeDiamonds(player: Player, amount: number): boolean
 	if profileData and (profileData.Diamonds or 0) >= amount then
 		profileData.Diamonds -= amount
 		Service.updateDiamondCount(player)
+		return true
+	end
+	return false
+end
+
+-- ------------------------------------------------------------------ fish coins
+-- Earned from fishing catches, spent in the Fish Coin Shop. Flat currency,
+-- same as Diamonds — never boosted by friend/pet/rebirth multipliers.
+function Service.updateFishCoinsCount(player: Player)
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if not profileData then
+		return
+	end
+	local amount = profileData.FishCoins or 0
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats and leaderstats:FindFirstChild("FishCoins") then
+		leaderstats.FishCoins.Value = amount
+	end
+	player:SetAttribute("FishCoins", amount)
+end
+
+function Service.giveFishCoins(player: Player, amount: number): number
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if profileData and typeof(amount) == "number" and amount > 0 then
+		amount = math.floor(amount)
+		profileData.FishCoins = (profileData.FishCoins or 0) + amount
+		Service.updateFishCoinsCount(player)
+		return amount
+	end
+	return 0
+end
+
+function Service.hasEnoughFishCoins(player: Player, amount: number): boolean
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if typeof(amount) ~= "number" then
+		return false
+	end
+	return profileData ~= nil and (profileData.FishCoins or 0) >= amount
+end
+
+function Service.removeFishCoins(player: Player, amount: number): boolean
+	local DataService = cachedModules.Cache.DataService
+	local profileData = DataService.getData(player)
+	if typeof(amount) ~= "number" or amount <= 0 then
+		return false
+	end
+	amount = math.floor(amount)
+	if profileData and (profileData.FishCoins or 0) >= amount then
+		profileData.FishCoins -= amount
+		Service.updateFishCoinsCount(player)
 		return true
 	end
 	return false

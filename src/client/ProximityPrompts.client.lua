@@ -416,33 +416,20 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 	toggleAllPrompts(false)
 
 	if prompt.Name == "OpenShop" then
-		local npc = prompt.Parent.Parent
-		Dialogue:NPC(npc, "Here are the shop seeds currently:")
-		task.delay(1.5, function()
-			Dialogue:HideAll()
-			showShopUI()
-			closeShopBtn.MouseButton1Click:Once(function()
-				toggleAllPrompts(true)
-			end)
+		-- QOL: no dialogue delay — the seed shop panel opens the instant E is pressed.
+		showShopUI()
+		closeShopBtn.MouseButton1Click:Once(function()
+			toggleAllPrompts(true)
 		end)
 	elseif prompt.Name == "SellShop" then
+		-- QOL: no dialogue delay — the sell panel opens the instant E is pressed.
 		local npc = prompt.Parent.Parent
 		currentNPC = npc
-		Dialogue:NPC(npc, "Got anything to sell?")
-		task.delay(1.5, function()
-			Dialogue:HideAll()
-			createSellGUI()
-		end)
+		createSellGUI()
 	elseif prompt.Name == "OpenPetShop" then
-		local npc = prompt.Parent.Parent
-		Dialogue:NPC(npc, "Looking for a pet? Roll for your companion! \xF0\x9F\x90\xBE")
-		task.delay(1.5, function()
-			Dialogue:HideAll()
-			firePetShopOpen()
-			task.delay(0.5, function()
-				toggleAllPrompts(true)
-			end)
-		end)
+		-- QOL: no dialogue delay — the pet shop panel opens the instant E is pressed.
+		firePetShopOpen()
+		toggleAllPrompts(true)
 	elseif prompt.Name == "CropPriceBoard" then
 		fireCropPriceBoardOpen()
 		task.delay(0.5, function()
