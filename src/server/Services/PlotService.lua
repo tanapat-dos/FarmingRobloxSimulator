@@ -737,6 +737,7 @@ function Service.init()
 					if growthPercentage.Value >= 100 then
 						-- Harvest
 						if foundSeed.MultiHarvest.Value then
+							local mutationService = cachedModules.Cache.MutationService
 							for _, fruit in serverConfig.Fruits:GetChildren() do
 								local lastHarvest = fruit.LastHarvest
 								local canHarvest = fruit.CanHarvest
@@ -746,6 +747,14 @@ function Service.init()
 										fruit.SizeScaling.Value = seedService.getRandomFruitSize(seedName, {})
 										if fruit:FindFirstChild("Rarity") then
 											fruit.Rarity.Value = rollHarvestRarityForCrop(plantKeyUtil.resolveCropName(crop.Name))
+										end
+										-- Reroll the growth mutation on every re-ripen (previously the
+										-- mutation rolled at plant time stuck forever on perennials like
+										-- Mango, so one lucky/unlucky roll persisted across hundreds of
+										-- harvests instead of each fruit getting its own fair shot).
+										if fruit:FindFirstChild("Mutations") and mutationService then
+											local fruitIndex = tonumber(fruit.Name)
+											fruit.Mutations.Value = mutationService.getRandomGrowthMutation(nil, fruitIndex)
 										end
 										canHarvest.Value = true
 									end

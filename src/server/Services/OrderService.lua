@@ -40,25 +40,20 @@ local ORDER_SLOTS = 3
 local REFRESH_SECONDS = 300 -- full board refresh cadence per player
 
 -- Expected sell value of one fruit is
---   baseValue * E[weight^2] * E[mutation] * rarityAvg(tier)
--- The old formula used only E[weight^2] and a 1.7x "bonus", omitting the 2.43x mutation
--- expectation entirely — so orders paid ~5.1x baseValue while selling averaged ~7.85x,
--- making the "premium" order board strictly worse than bulk selling.
---
--- Now orders pay the full expected value with a deliberate discount: they are the reliable,
+--   baseValue * E[weight^1.5] * E[mutation] * rarityAvg(tier)
+-- Orders pay the full expected value with a deliberate discount: they are the reliable,
 -- zero-variance floor, while selling stays the high-variance play where mutations pay off.
+--
+-- These constants MUST stay in sync with EconomyBalance's
+-- EXPECTED_STANDARD_SIZE_MULTIPLIER / EXPECTED_PERENNIAL_SIZE_MULTIPLIER /
+-- EXPECTED_GROWTH_MUTATION_MULTIPLIER and GetFruitValue's weight exponent + mutation table.
 local ORDER_PAYOUT_RATIO = 0.85
 
--- Matches SeedShopService.getRandomFruitSize: w = a + b * r^2.2, E[r^k] = 1/(k+1)
-local function expectedWeightSq(a: number, b: number): number
-	return a * a + 2 * a * b * (1 / 3.2) + b * b * (1 / 5.4)
-end
+local E_W15_STANDARD = EconomyBalance.EXPECTED_STANDARD_SIZE_MULTIPLIER -- ~2.171
+local E_W15_MANGO = EconomyBalance.EXPECTED_PERENNIAL_SIZE_MULTIPLIER -- ~1.181 (reduced roll, perennial)
 
-local E_W2_STANDARD = expectedWeightSq(1, 2) -- ~2.99
-local E_W2_MANGO = expectedWeightSq(0.75, 1.1) -- ~1.30 (reduced roll, perennial)
-
--- MutationService: 1% Rainbow (x50), then 5% Golden (x20) of the remaining 99%
-local E_MUTATION = 0.01 * 50 + (0.99 * 0.05) * 20 + (1 - 0.01 - 0.99 * 0.05) * 1
+-- MutationService: 1% Rainbow (x8), then 5% Golden (x3) of the remaining 99%
+local E_MUTATION = EconomyBalance.EXPECTED_GROWTH_MUTATION_MULTIPLIER -- ~1.169
 
 -- Average harvest-quality multiplier for a crop of the given tier.
 local rarityAvgCache: { [string]: number } = {}
@@ -130,7 +125,7 @@ local function getCropPool()
 				price = cfg.price,
 				tier = cfg.rarity,
 				-- Perennials use a reduced size roll, so their fruits are worth less each.
-				expectedWeightSq = if cfg.multiHarvest then E_W2_MANGO else E_W2_STANDARD,
+				expectedWeightSq = if cfg.multiHarvest then E_W15_MANGO else E_W15_STANDARD,
 				weight = weight,
 			})
 		end

@@ -6,15 +6,18 @@ local HarvestRarityConfig = require(modules.HarvestRarityConfig)
 
 local growthMutations = {
 	["None"] = 1,
-	["Golden"] = 20,
-	["Rainbow"] = 50,
+	["Golden"] = 3,
+	["Rainbow"] = 8,
 }
 
--- Applied by WeatherService while Rain / Thunderstorm is active.
+-- Applied by WeatherService while Rain / Thunderstorm is active. Wet and Shocked are
+-- mutually exclusive (Shocked takes priority) rather than stacking multiplicatively — a fruit
+-- can carry both mutation strings (Thunderstorm can roll either), but only the stronger one
+-- counts toward sell value.
 local environmentalMutations = {
 	["None"] = 1,
-	["Wet"] = 2,
-	["Shocked"] = 8,
+	["Wet"] = 1.25,
+	["Shocked"] = 2.00,
 }
 
 return function(fruitData: any)
@@ -38,18 +41,19 @@ return function(fruitData: any)
 
 		local rarityMultiplier = HarvestRarityConfig.getMultiplier(rarity)
 
-		-- Environmental mutations stack multiplicatively (Wet + Shocked is
-		-- possible during a thunderstorm, and both are rare).
-		local environmentalMultipler: number = 1
+		-- Environmental mutations are mutually exclusive: a fruit can carry both "Wet" and
+		-- "Shocked" mutation strings (Thunderstorm rolls either independently), but only the
+		-- stronger one (Shocked) counts toward sell value.
+		local environmentalMultipler: number = environmentalMutations.None
 		if #mutations > 0 then
-			for mut: string, multiplier: number in environmentalMutations do
-				if mut ~= "None" and table.find(mutations, mut) then
-					environmentalMultipler *= multiplier
-				end
+			if table.find(mutations, "Shocked") then
+				environmentalMultipler = environmentalMutations.Shocked
+			elseif table.find(mutations, "Wet") then
+				environmentalMultipler = environmentalMutations.Wet
 			end
 		end
 
-		return baseValue * weight ^ 2 * growthMutationMultiplier * rarityMultiplier * environmentalMultipler
+		return baseValue * weight ^ 1.5 * growthMutationMultiplier * rarityMultiplier * environmentalMultipler
 	end
 	return 10
 end

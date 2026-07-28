@@ -52,6 +52,7 @@ local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 
 local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
 local BackpackPanelUi = require(ReplicatedStorage:WaitForChild("Modules").BackpackPanelUi)
+local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local templates = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("MenuBarTemplates")
 
@@ -114,7 +115,7 @@ end
 -- `icon` is only used by the generic (emoji) template. Laid out as a
 -- GRID_COLUMNS-wide grid (see below) instead of one long column, so with
 -- 11 buttons this reads as 3 short rows rather than a tall stack.
-local BUTTONS = {
+local ALL_BUTTONS = {
 	{ name = "BackpackBtn",       template = "BtnTemplate_Backpack", label = "Bag",      panel = "Backpack" },
 	{ name = "GardenTeleport",    template = "BtnTemplate_Generic",  icon = "🌱", label = "Garden" },
 	{ name = "SeedsTeleport",     template = "BtnTemplate_Generic",  icon = "🌾", label = "Seeds" },
@@ -127,6 +128,15 @@ local BUTTONS = {
 	{ name = "AchievementsBtn",   template = "BtnTemplate_Book",     label = "Achieve",  panel = "Achievements" },
 	{ name = "DailyLoginBtn",     template = "BtnTemplate_Gift",     label = "Daily",    panel = "DailyLogin" },
 }
+
+-- Rebirth is disabled per economy rebalance: drop the button entirely rather than leaving a
+-- dead/disabled entry in the bar.
+local BUTTONS = {}
+for _, def in ALL_BUTTONS do
+	if def.name ~= "RebirthTeleport" or EconomyBalance.REBIRTH_ENABLED then
+		table.insert(BUTTONS, def)
+	end
+end
 
 local gui: ScreenGui
 local bar: Frame

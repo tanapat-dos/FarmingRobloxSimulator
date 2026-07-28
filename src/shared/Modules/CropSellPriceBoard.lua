@@ -46,7 +46,9 @@ end
 
 local function computeReferenceSellPrice(baseValue: number): number
 	local rarityMultiplier = HarvestRarityConfig.getMultiplier(REFERENCE_HARVEST_RARITY)
-	return math.floor(baseValue * REFERENCE_WEIGHT * REFERENCE_WEIGHT * rarityMultiplier)
+	-- Matches GetFruitValue's weight^1.5 exponent (REFERENCE_WEIGHT = 1, so numerically this
+	-- is a no-op either way, but kept in sync so the formula shape doesn't silently diverge).
+	return math.floor(baseValue * REFERENCE_WEIGHT ^ 1.5 * rarityMultiplier)
 end
 
 function CropSellPriceBoard.getDisplayEntries(bestByCrop: { [string]: BestSaleRecord }?): { LeaderboardEntry }

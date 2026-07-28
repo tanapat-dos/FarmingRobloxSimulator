@@ -35,8 +35,13 @@ local SAVE_MIN_INTERVAL = 5 -- throttle DataStore writes when sales come in in q
 ]]
 local leaderboardStore: GlobalDataStore? = nil
 if not IS_STUDIO then
+	-- Bumped to v2 for the economy rebalance: baseValue/weight-exponent/mutation-multiplier
+	-- changes mean old v1 best-sale records are no longer achievable under the new formula,
+	-- so a v1 leaderboard entry would sit unbeatable forever. Starting fresh under a new key
+	-- avoids that; v1 data is simply abandoned (not migrated), since a "best sale" record
+	-- has no meaningful conversion under different economy constants.
 	local ok, store = pcall(function()
-		return DataStoreService:GetDataStore("CropSellLeaderboard_v1")
+		return DataStoreService:GetDataStore("CropSellLeaderboard_v2")
 	end)
 	if ok then
 		leaderboardStore = store

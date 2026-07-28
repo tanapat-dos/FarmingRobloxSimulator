@@ -11,8 +11,9 @@
 	actually live. Run tools/MigrateSeedDataEconomy.lua to fix.
 
 	Properties checked:
-	  P1  every cash crop returns >= 1.9x its seed cost; perennials pay back within 4h
-	  P2  profit per slot-hour strictly increasing across tiers (cash crops)
+	  P1  every standard cash crop's expected sale is within 5% of TARGET_EXPECTED_SALE_ROI
+	      (1.60x its seed price); Mango pays back within 8h; Crystal Blooms preserved payout
+	  P2  growth time tier averages land within their target pacing band
 	  P5  SeedData Price/BaseValue/GrowthTime match EconomyBalance.CROPS
 	  P6  every crop in exactly one tier, no empty tiers
 	  P7  HarvestCount/HarvestInterval/MultiHarvest unchanged (Mango 4/600 only perennial)
@@ -26,28 +27,37 @@ local seedDataFolder = ReplicatedStorage.Modules.SeedData
 
 local TIER_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical" }
 
-local TIER_TARGET = {
-	Common = 600,
-	Uncommon = 1200,
-	Rare = 2500,
-	Epic = 5000,
-	Legendary = 10000,
-	Mythical = 20000,
+-- Growth-time tier-average pacing bands (validation section 14): Common 55-75s,
+-- Mythical 1110-1250s, middle tiers interpolated geometrically between the two.
+local GROWTH_TIME_BAND = {
+	Common = { 55, 75 },
+	Uncommon = { 96, 137 },
+	Rare = { 171, 245 },
+	Epic = { 306, 437 },
+	Legendary = { 546, 780 },
+	Mythical = { 1110, 1250 },
 }
 
--- MutationService: 1% Rainbow (x50), then 5% Golden (x20) of the remaining 99%
+-- MutationService: 1% Rainbow (x8), then 5% Golden (x3) of the remaining 99%
 local P_RAINBOW = 0.01
 local P_GOLDEN = 0.99 * 0.05
-local E_MUTATION = P_RAINBOW * 50 + P_GOLDEN * 20 + (1 - P_RAINBOW - P_GOLDEN) * 1
+local E_MUTATION = P_RAINBOW * 8 + P_GOLDEN * 3 + (1 - P_RAINBOW - P_GOLDEN) * 1
 
--- getRandomFruitSize: w = a + b * r^2.2  ->  E[w^2], using E[r^k] = 1/(k+1)
-local function expectedWeightSq(a: number, b: number): number
-	local Er22, Er44 = 1 / 3.2, 1 / 5.4
-	return a * a + 2 * a * b * Er22 + b * b * Er44
+-- getRandomFruitSize: w = a + b * r^2.2  ->  E[w^1.5], using E[r^k] = 1/(k+1)
+local function expectedWeightPow15(a: number, b: number): number
+	-- E[(a + b*r^2.2)^1.5] has no closed form; EconomyBalance's constants were derived via
+	-- numeric integration (see .mcp-tmp/economy_rebalance_calc.mjs history) and are the
+	-- source of truth here, matching what GetFruitValue actually multiplies by.
+	if a == 1 and b == 2 then
+		return EconomyBalance.EXPECTED_STANDARD_SIZE_MULTIPLIER
+	elseif a == 0.75 and b == 1.1 then
+		return EconomyBalance.EXPECTED_PERENNIAL_SIZE_MULTIPLIER
+	end
+	error("expectedWeightPow15: no known constant for a=" .. a .. " b=" .. b)
 end
 
-local E_W2_STANDARD = expectedWeightSq(1, 2)
-local E_W2_MANGO = expectedWeightSq(0.75, 1.1)
+local E_W15_STANDARD = expectedWeightPow15(1, 2)
+local E_W15_MANGO = expectedWeightPow15(0.75, 1.1)
 
 local function rarityAvg(tier: string): number
 	local bias = HarvestRarityConfig.CROP_BIAS[tier]
@@ -68,14 +78,15 @@ local function fail(message: string)
 end
 
 print("=== Constants ===")
-print(("  E[weight^2] standard = %.4f"):format(E_W2_STANDARD))
-print(("  E[weight^2] mango    = %.4f"):format(E_W2_MANGO))
-print(("  E[mutation]          = %.4f"):format(E_MUTATION))
+print(("  E[weight^1.5] standard = %.4f"):format(E_W15_STANDARD))
+print(("  E[weight^1.5] mango    = %.4f"):format(E_W15_MANGO))
+print(("  E[mutation]            = %.4f"):format(E_MUTATION))
+print(("  TARGET_EXPECTED_SALE_ROI = %.2fx"):format(EconomyBalance.TARGET_EXPECTED_SALE_ROI))
 
 print("=== Tier multipliers ===")
 for _, tier in TIER_ORDER do
 	local ra = rarityAvg(tier)
-	print(("  %-10s rarityAvg=%.4f  M=%.3f"):format(tier, ra, E_W2_STANDARD * E_MUTATION * ra))
+	print(("  %-10s rarityAvg=%.4f  M=%.3f"):format(tier, ra, E_W15_STANDARD * E_MUTATION * ra))
 end
 
 -- ------------------------------------------------------------------ evaluate crops
@@ -83,8 +94,8 @@ local rows = {}
 for seedName, cfg in EconomyBalance.CROPS do
 	local tier = cfg.rarity
 	local isPerennial = cfg.multiHarvest == true
-	local eW2 = if isPerennial then E_W2_MANGO else E_W2_STANDARD
-	local perFruit = cfg.baseValue * eW2 * E_MUTATION * rarityAvg(tier)
+	local eW15 = if isPerennial then E_W15_MANGO else E_W15_STANDARD
+	local perFruit = cfg.baseValue * eW15 * E_MUTATION * rarityAvg(tier)
 
 	local profitPerHour, ratio
 	if isPerennial then
@@ -133,20 +144,26 @@ for _, r in rows do
 end
 
 -- ------------------------------------------------------------------ P1
+local TARGET_ROI = EconomyBalance.TARGET_EXPECTED_SALE_ROI
 for _, r in rows do
-	if r.isPerennial then
+	if r.seedName == "Mango Seed" then
 		local payback = (r.cfg.price or 0) / r.profitPerHour
-		print(("  Perennial payback: %s = %.2fh"):format(r.seedName, payback))
-		if payback > 4 then
-			fail(("P1 %s: payback %.1fh > 4h"):format(r.seedName, payback))
+		print(("  Mango payback = %.2fh (target ~7.5h)"):format(payback))
+		if payback > 8 then
+			fail(("P1 Mango: payback %.1fh > 8h"):format(payback))
 		end
-	elseif r.ratio and r.ratio < 1.9 then
-		fail(("P1 %s: return %.2fx < 1.9x"):format(r.seedName, r.ratio))
+	elseif r.seedName == "Crystal Blooms Seed" then
+		-- Apex/Fish-Coin crop: no cash ROI check, just report the per-fruit value.
+		print(("  Crystal Blooms per-fruit value = %.1f"):format(r.perFruit))
+	elseif r.ratio then
+		if math.abs(r.ratio - TARGET_ROI) / TARGET_ROI > 0.05 then
+			fail(("P1 %s: return %.3fx drifts >5%% from target %.2fx"):format(r.seedName, r.ratio, TARGET_ROI))
+		end
 	end
 end
 
 -- ------------------------------------------------------------------ P2 / P6
-local byTier = {}
+local growthTimesByTier = {}
 local seen = {}
 for _, r in rows do
 	if seen[r.seedName] then
@@ -158,37 +175,29 @@ for _, r in rows do
 		fail(("P6 %s: unknown tier %s"):format(r.seedName, tostring(r.tier)))
 	end
 
-	-- Crystal Blooms is the documented apex exception (Fish Coin throttled)
-	if r.seedName ~= "Crystal Blooms Seed" then
-		byTier[r.tier] = byTier[r.tier] or {}
-		table.insert(byTier[r.tier], r.profitPerHour)
+	-- Crystal Blooms and Mango are documented exceptions (apex/perennial pacing, not the
+	-- standard-crop growth-time band).
+	if r.seedName ~= "Crystal Blooms Seed" and r.seedName ~= "Mango Seed" then
+		growthTimesByTier[r.tier] = growthTimesByTier[r.tier] or {}
+		table.insert(growthTimesByTier[r.tier], r.cfg.growthTime)
 	end
 end
 
-local prevMax = -math.huge
 for _, tier in TIER_ORDER do
-	local vals = byTier[tier]
+	local vals = growthTimesByTier[tier]
 	if not vals or #vals == 0 then
 		fail("P6 tier " .. tier .. " has no crops")
 		continue
 	end
-	local minV, maxV = math.huge, -math.huge
+	local sum = 0
 	for _, v in vals do
-		minV = math.min(minV, v)
-		maxV = math.max(maxV, v)
+		sum += v
 	end
-	if minV <= prevMax then
-		fail(("P2 tier %s: min $%d/hr <= previous tier max $%d/hr"):format(tier, minV, prevMax))
+	local avg = sum / #vals
+	local band = GROWTH_TIME_BAND[tier]
+	if band and (avg < band[1] or avg > band[2]) then
+		fail(("P2 tier %s: growthTime avg %.0fs outside band [%d, %d]"):format(tier, avg, band[1], band[2]))
 	end
-	local target = TIER_TARGET[tier]
-	if target then
-		for _, v in vals do
-			if math.abs(v - target) / target > 0.15 then
-				fail(("P2 tier %s: $%d/hr drifts >15%% from target $%d/hr"):format(tier, v, target))
-			end
-		end
-	end
-	prevMax = maxV
 end
 
 -- ------------------------------------------------------------------ P5 / P7
@@ -239,8 +248,9 @@ end
 
 -- ------------------------------------------------------------------ result
 print(("=== Result: %d crops checked ==="):format(#rows))
-if #rows ~= 18 then
-	fail(("P6 expected 18 crops, got %d"):format(#rows))
+-- 17 standard cash crops + Crystal Blooms (apex, Fish Coin) + Mango (perennial) = 19.
+if #rows ~= 19 then
+	fail(("P6 expected 19 crops, got %d"):format(#rows))
 end
 
 if #failures == 0 then

@@ -88,6 +88,10 @@ EconomyBalance.UPGRADES = {
 }
 
 -- Rebirth: reset cash/seeds/crops/plots for a permanent sell multiplier.
+-- DISABLED per economy rebalance: the whole loop is gated off below (REBIRTH_ENABLED). The
+-- altar is not built, requests are rejected server-side, and no bonus is applied — but any
+-- previously-saved data.Rebirths count is left untouched in case it's re-enabled later.
+EconomyBalance.REBIRTH_ENABLED = false
 EconomyBalance.REBIRTH = {
 	baseCost = 250000,
 	costMult = 4, -- rebirth N costs baseCost * costMult^N
@@ -95,6 +99,11 @@ EconomyBalance.REBIRTH = {
 }
 
 -- Procedural gear (no .rbxl assets: tools are built in code like pet tools).
+-- Mutation Spray uses deferred/dynamic pricing (see getMutationSprayExtraCost below):
+-- the kiosk price below is charged upfront (covers the formula's $3500 floor for any crop),
+-- and an additional charge is collected at USE time if the target crop's seed price pushes
+-- the dynamic formula above that floor. This avoids a free-to-hold, pay-later exploit while
+-- still letting the final price scale with the target crop.
 EconomyBalance.GEAR = {
 	["Fertilizer"] = {
 		price = 750,
@@ -104,9 +113,19 @@ EconomyBalance.GEAR = {
 	["Mutation Spray"] = {
 		price = 3500,
 		color = Color3.fromRGB(120, 220, 255),
-		description = "Sprays your nearest crop: guaranteed Golden, 25% Rainbow.",
+		description = "Sprays your nearest crop: guaranteed Golden. Pricier crops cost extra "
+			.. "to spray (charged when used). Cannot target Mango or Crystal Blooms.",
 	},
 }
+
+-- Dynamic Mutation Spray pricing: price = max(3500, ceil(targetSeedPrice * 2.75)).
+-- The kiosk already collects GEAR["Mutation Spray"].price ($3500) upfront; this returns only
+-- the ADDITIONAL amount to collect at use-time (0 for any crop priced <= ~1273, since 3500 is
+-- already the formula's floor).
+function EconomyBalance.getMutationSprayExtraCost(targetSeedPrice: number): number
+	local dynamicPrice = math.max(3500, math.ceil((targetSeedPrice or 0) * 2.75))
+	return math.max(0, dynamicPrice - EconomyBalance.GEAR["Mutation Spray"].price)
+end
 
 EconomyBalance.EGG_ORDER = {
 	"Common Egg",
@@ -206,19 +225,16 @@ EconomyBalance.EGGS = {
 }
 
 -- BaseValue drives sell price via GetFruitValue:
---   revenue = baseValue * weight^2 * mutations * rarity
+--   revenue = baseValue * weight^1.5 * mutations * rarity
 --
--- Every value below is derived, not hand-picked. With E[weight^2] = 2.99 (from the
--- `1 + r^2.2 * 2` size roll), E[mutation] = 2.43 (1% Rainbow x50, ~4.95% Golden x20) and
--- the per-tier harvest-quality average from HarvestRarityConfig.CROP_BIAS, the expected
--- revenue per baseValue point is M(tier):
---
---   Common 7.85 | Uncommon 8.46 | Rare 9.42 | Epic 10.34 | Legendary 11.81 | Mythical 12.99
---
--- Each crop satisfies `baseValue * M = 2 * price`, so a cycle returns ~2x the seed cost, and
--- growthTime rises more slowly than value so profit per slot-hour roughly DOUBLES per tier:
---
---   Common $600 | Uncommon $1.2K | Rare $2.5K | Epic $5K | Legendary $10K | Mythical $20K
+-- Every value below is derived, not hand-picked (2025 economy rebalance). With
+-- E[weight^1.5] = 2.171 (from the `1 + r^2.2 * 2` size roll) and the new
+-- E[mutation] = EXPECTED_GROWTH_MUTATION_MULTIPLIER (~1.169: 1% Rainbow x8, ~4.95% Golden x3),
+-- every standard crop is sized so its expected sale (average roll, no weather/pets/spray)
+-- equals TARGET_EXPECTED_SALE_ROI (1.60x) of its seed price — i.e. one harvest averages a 60%
+-- profit margin over cost. growthTime is set from the tier's target pacing band (Common
+-- ~55-75s up to Mythical ~1110-1250s, see tools/VerifyEconomyMath.lua), scaled per-crop to
+-- preserve each crop's relative speed within its tier.
 --
 -- Verify with tools/VerifyEconomyMath.lua after any edit here.
 --
@@ -227,44 +243,50 @@ EconomyBalance.EGGS = {
 -- IMPORTANT: SeedData (ReplicatedStorage.Modules.SeedData, an instance tree) is what the
 -- game actually reads at runtime. Editing this table alone changes nothing — run
 -- tools/MigrateSeedDataEconomy.lua to push these values into SeedData.
+EconomyBalance.TARGET_EXPECTED_SALE_ROI = 1.60 -- E[revenue] / seedPrice for standard crops
+EconomyBalance.EXPECTED_STANDARD_SIZE_MULTIPLIER = 2.171 -- E[weight^1.5], standard roll (1 + r^2.2*2)
+EconomyBalance.EXPECTED_PERENNIAL_SIZE_MULTIPLIER = 1.181 -- E[weight^1.5], Mango's reduced roll
+EconomyBalance.EXPECTED_GROWTH_MUTATION_MULTIPLIER = 1.169 -- E[mutation]: 1%x8 + 4.95%x3 + rest x1
+
 EconomyBalance.CROPS = {
 	-- Common — no unlock gate
-	["Carrot Seed"] = { price = 25, baseValue = 6.4, growthTime = 150, rarity = "Common" },
-	["Wheat Seed"] = { price = 35, baseValue = 8.9, growthTime = 210, rarity = "Common" },
+	["Carrot Seed"] = { price = 25, baseValue = 14.6, growthTime = 55, rarity = "Common" },
+	["Wheat Seed"] = { price = 35, baseValue = 20.4, growthTime = 75, rarity = "Common" },
 
 	-- Uncommon — no unlock gate
-	["Lettuce Seed"] = { price = 90, baseValue = 21.3, growthTime = 270, rarity = "Uncommon" },
-	["Potato Seed"] = { price = 100, baseValue = 23.6, growthTime = 300, rarity = "Uncommon" },
-	["Beetroot Seed"] = { price = 110, baseValue = 26, growthTime = 330, rarity = "Uncommon" },
+	["Lettuce Seed"] = { price = 90, baseValue = 48.7, growthTime = 105, rarity = "Uncommon" },
+	["Potato Seed"] = { price = 100, baseValue = 54.2, growthTime = 115, rarity = "Uncommon" },
+	["Beetroot Seed"] = { price = 110, baseValue = 59.6, growthTime = 130, rarity = "Uncommon" },
 
 	-- Rare — $25K earned
-	["Tomato Seed"] = { price = 270, baseValue = 57.3, growthTime = 390, rarity = "Rare" },
-	["Garlic Seed"] = { price = 290, baseValue = 61.6, growthTime = 420, rarity = "Rare" },
-	["Corn Seed"] = { price = 315, baseValue = 66.9, growthTime = 450, rarity = "Rare" },
+	["Tomato Seed"] = { price = 270, baseValue = 131.3, growthTime = 190, rarity = "Rare" },
+	["Garlic Seed"] = { price = 290, baseValue = 141.0, growthTime = 205, rarity = "Rare" },
+	["Corn Seed"] = { price = 315, baseValue = 153.2, growthTime = 220, rarity = "Rare" },
 
 	-- Epic — $250K earned + 3 plots
-	["Strawberry Seed"] = { price = 750, baseValue = 145.2, growthTime = 540, rarity = "Epic" },
-	["Pepper Seed"] = { price = 840, baseValue = 162.6, growthTime = 600, rarity = "Epic" },
-	["Pumpkin Seed"] = { price = 920, baseValue = 178.1, growthTime = 660, rarity = "Epic" },
+	["Strawberry Seed"] = { price = 750, baseValue = 332.5, growthTime = 335, rarity = "Epic" },
+	["Pepper Seed"] = { price = 840, baseValue = 372.4, growthTime = 370, rarity = "Epic" },
+	["Pumpkin Seed"] = { price = 920, baseValue = 407.9, growthTime = 405, rarity = "Epic" },
 
 	-- Legendary — $2M earned + 500 fruits harvested
-	["Grape Seed"] = { price = 2350, baseValue = 398, growthTime = 840, rarity = "Legendary" },
-	["Eggplant Seed"] = { price = 2500, baseValue = 423.4, growthTime = 900, rarity = "Legendary" },
-	["Pineapple Seed"] = { price = 2670, baseValue = 452.2, growthTime = 960, rarity = "Legendary" },
+	["Grape Seed"] = { price = 2350, baseValue = 911.7, growthTime = 615, rarity = "Legendary" },
+	["Eggplant Seed"] = { price = 2500, baseValue = 969.9, growthTime = 660, rarity = "Legendary" },
+	["Pineapple Seed"] = { price = 2670, baseValue = 1035.9, growthTime = 705, rarity = "Legendary" },
 
 	-- Mythical — $15M earned + 10 mutations found
-	["Candy Vine Seed"] = { price = 5650, baseValue = 869.7, growthTime = 1020, rarity = "Mythical" },
-	["Red Mushroom Seed"] = { price = 6000, baseValue = 923.6, growthTime = 1080, rarity = "Mythical" },
-	["Bubble Rash Seed"] = { price = 6350, baseValue = 977.7, growthTime = 1140, rarity = "Mythical" },
+	["Candy Vine Seed"] = { price = 5650, baseValue = 1992.7, growthTime = 1115, rarity = "Mythical" },
+	["Red Mushroom Seed"] = { price = 6000, baseValue = 2116.2, growthTime = 1180, rarity = "Mythical" },
+	["Bubble Rash Seed"] = { price = 6350, baseValue = 2239.6, growthTime = 1245, rarity = "Mythical" },
 
 	-- Apex crop. Bought with Fish Coins (see FishCoinShopService), so `price = 0` here:
-	-- its entire output is profit, which is why it beats every cash crop at ~$39K/slot-hr.
-	-- Fish Coin supply is the throttle — steady fishing sustains only ~2-3 slots.
-	-- Highest baseValue in the game, so also the most valuable single fruit.
+	-- its entire output is profit. Fish Coin supply is the throttle — steady fishing
+	-- sustains only ~2-3 slots. baseValue recalculated to preserve its PRE-rebalance expected
+	-- payout (~$12,993/fruit) under the new weight^1.5 exponent and mutation multipliers, so
+	-- Crystal Blooms' relative value to the rest of the game doesn't silently shift.
 	["Crystal Blooms Seed"] = {
 		price = 0,
 		fishCoinPrice = 150,
-		baseValue = 1000,
+		baseValue = 2864.2,
 		growthTime = 1200,
 		rarity = "Mythical",
 	},
@@ -273,12 +295,13 @@ EconomyBalance.CROPS = {
 	-- attachment points on the mesh and MUST NOT be changed without new art.
 	-- 4 slots re-ripening every 600s = 24 fruits/hour forever, so seed cost amortises away
 	-- and the meaningful figures are the perpetual hourly rate and the payback period.
-	-- Mango also uses a reduced size roll (`0.75 + r^2.2 * 1.1`, E[weight^2] = 1.302), so its
-	-- per-fruit multiplier is 5.66 rather than 12.99.
-	-- baseValue 147 -> ~$20K/hr in perpetuity; $60K price -> ~3.0h payback.
+	-- Mango uses a reduced size roll (`0.75 + r^2.2 * 1.1`, E[weight^1.5] = 1.181).
+	-- baseValue 135.1 -> $8,000/hr in perpetuity; $60K price -> 7.5h payback. Mango fruits
+	-- now reroll their growth mutation independently on every re-ripen (see PlotService),
+	-- instead of the mutation rolled at plant time sticking forever.
 	["Mango Seed"] = {
 		price = 60000,
-		baseValue = 147,
+		baseValue = 135.1,
 		growthTime = 1260,
 		rarity = "Mythical",
 		multiHarvest = true,
@@ -339,16 +362,32 @@ function EconomyBalance.getPetGrowthReductionPct(eggName: string, petName: strin
 	return 0
 end
 
-function EconomyBalance.getEffectiveGrowthTime(baseSeconds: number, growthReductionPct: number): number
-	local reduction = math.clamp(growthReductionPct or 0, 0, 90)
+-- Growth time floor: no combination of pet + upgrade reductions can shrink grow time below
+-- 50% of its base value (previously a 90%-reduction cap, i.e. a 10% floor — far too aggressive
+-- once pet and upgrade reductions stack multiplicatively instead of additively).
+local GROWTH_TIME_FLOOR_PCT = 50
+
+-- `combinedReductionPct` (from getTotalGrowthReduction) already encodes the multiplicative
+-- stack as a single equivalent percentage, clamped to the 50%-of-base floor.
+function EconomyBalance.getEffectiveGrowthTime(baseSeconds: number, combinedReductionPct: number): number
+	local reduction = math.clamp(combinedReductionPct or 0, 0, 100 - GROWTH_TIME_FLOOR_PCT)
 	return math.max(1, baseSeconds * (1 - reduction / 100))
 end
 
--- Growth reductions from pets and the Upgrade Board stack additively, capped at 90%.
+-- Pet and Upgrade Board growth reductions now stack MULTIPLICATIVELY
+-- (remainingTime = base * (1 - petPct/100) * (1 - upgradePct/100)) instead of additively, and
+-- the pet contribution itself is capped at +100% effective reduction (i.e. pet alone can never
+-- reduce below 0% of base) before combining with the upgrade term. The combined result is
+-- expressed back as a single "reduction %" for getEffectiveGrowthTime, then floored so total
+-- grow time never drops below 50% of its base value.
 function EconomyBalance.getTotalGrowthReduction(petPct: number?, upgradePct: number?): number
-	local pet = typeof(petPct) == "number" and petPct or 0
-	local upgrade = typeof(upgradePct) == "number" and upgradePct or 0
-	return math.clamp(pet + upgrade, 0, 90)
+	local pet = math.clamp(typeof(petPct) == "number" and petPct or 0, 0, 100)
+	local upgrade = math.clamp(typeof(upgradePct) == "number" and upgradePct or 0, 0, 100)
+
+	local remainingFraction = (1 - pet / 100) * (1 - upgrade / 100)
+	local combinedReductionPct = (1 - remainingFraction) * 100
+
+	return math.clamp(combinedReductionPct, 0, 100 - GROWTH_TIME_FLOOR_PCT)
 end
 
 function EconomyBalance.getGrowthUpgradeMaxLevel(): number

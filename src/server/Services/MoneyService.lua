@@ -248,11 +248,18 @@ end
 
 function Service.getCashMultiplier(target: Player): number
 	local EconomyBalance = require(modules.EconomyBalance)
-	local rebirths = target:GetAttribute("Rebirths")
-	if typeof(rebirths) ~= "number" then
-		rebirths = 0
+
+	-- Rebirth is disabled (EconomyBalance.REBIRTH_ENABLED = false): no bonus is applied even
+	-- if a player has a saved data.Rebirths count from before the system was turned off.
+	local rebirthMultiplier = 1
+	if EconomyBalance.REBIRTH_ENABLED then
+		local rebirths = target:GetAttribute("Rebirths")
+		if typeof(rebirths) ~= "number" then
+			rebirths = 0
+		end
+		rebirthMultiplier = 1 + rebirths * EconomyBalance.REBIRTH.boostPerRebirth
 	end
-	local rebirthMultiplier = 1 + rebirths * EconomyBalance.REBIRTH.boostPerRebirth
+
 	return (target:GetAttribute("FriendBoost") or 1)
 		* (target:GetAttribute("PetBoost") or 1)
 		* rebirthMultiplier

@@ -105,6 +105,10 @@ local function performRebirth(player: Player)
 end
 
 local function onAltarTriggered(player: Player)
+	if not EconomyBalance.REBIRTH_ENABLED then
+		notify(player, "Rebirth is currently disabled.", "info")
+		return
+	end
 	if player:GetAttribute("DataLoaded") ~= true then
 		return
 	end
@@ -240,7 +244,18 @@ local function buildAltar()
 end
 
 function Service.init()
-	buildAltar()
+	-- Rebirth is disabled per economy rebalance: don't build the altar at all, so there's no
+	-- UI/prompt to interact with. onAltarTriggered also fails closed as a defense-in-depth
+	-- measure in case an altar already exists in the saved place file. Saved data.Rebirths
+	-- counts are left untouched in DataService in case this is re-enabled later.
+	if EconomyBalance.REBIRTH_ENABLED then
+		buildAltar()
+	else
+		local existingAltar = workspace:FindFirstChild("RebirthAltar")
+		if existingAltar then
+			existingAltar:Destroy()
+		end
+	end
 
 	Players.PlayerRemoving:Connect(function(player)
 		pendingConfirm[player] = nil

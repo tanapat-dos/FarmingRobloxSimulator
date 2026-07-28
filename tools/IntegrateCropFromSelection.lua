@@ -34,7 +34,7 @@
 --]]
 
 --=============================== CONFIGURE ===============================
-local CROP_NAME = "Carrot" -- display name, no " Seed" suffix
+local CROP_NAME = "Corn" -- display name, no " Seed" suffix
 local DRY_RUN = false -- true = report the detected stage order and change nothing
 --=========================================================================
 
@@ -342,6 +342,30 @@ end
 ]]
 local GRIP_HEIGHT_FRACTION = 0.33 -- 0 = bottom of model, 1 = top; lower third reads naturally
 
+--[[
+	Instance:Clone() is a deep copy. If a source MeshPart has a nested Model/MeshPart child
+	(seen on some pack assets — e.g. an Icosphere.003 mesh with a child Model grouping extra
+	Circle.022 copies, likely leftover grouping from the original asset), cloning that mesh
+	ALSO clones the nested junk at its ORIGINAL, uncorrected world position — while the same
+	nested meshes get independently found by GetDescendants() and cloned+recentered correctly
+	as their own top-level siblings anyway. Net result: duplicate geometry, with one copy sitting
+	hundreds of studs away from the model.
+
+	This is invisible on a held Tool (nothing frames a camera around it), but SeedModels
+	previews are auto-framed by GetBoundingBox() in the shop's ViewportFrame (see
+	ShopScript.lua setupViewportModel) — the far-away junk balloons the box, so the camera
+	zooms out until the real, correctly-sized model becomes an invisible speck. This is
+	exactly what happened to Carrot's shop preview. Strip any nested Model/MeshPart out of
+	every clone so only the flat, individually-recentered top-level copies remain.
+]]
+local function stripNestedGeometry(clone: MeshPart)
+	for _, descendant in clone:GetDescendants() do
+		if descendant:IsA("Model") or descendant:IsA("MeshPart") then
+			descendant:Destroy()
+		end
+	end
+end
+
 local function createFruitToolFromModel(sourceModel: Model)
 	local existing = cropsFolder:FindFirstChild(CROP_NAME)
 	if existing then
@@ -361,7 +385,9 @@ local function createFruitToolFromModel(sourceModel: Model)
 
 	local temp = Instance.new("Model")
 	for _, mesh in meshes do
-		mesh:Clone().Parent = temp
+		local clone = mesh:Clone()
+		stripNestedGeometry(clone)
+		clone.Parent = temp
 	end
 	local boundsCFrame, boundsSize = temp:GetBoundingBox()
 	local center = boundsCFrame.Position
@@ -393,6 +419,7 @@ local function createFruitToolFromModel(sourceModel: Model)
 
 	for _, mesh in meshes do
 		local clone = mesh:Clone()
+		stripNestedGeometry(clone)
 		clone.Anchored = false
 		clone.CanCollide = false
 		clone.Massless = true
@@ -424,6 +451,7 @@ local function createSeedPreview(sourceModel: Model)
 	for _, mesh in sourceModel:GetDescendants() do
 		if mesh:IsA("MeshPart") then
 			local clone = mesh:Clone()
+			stripNestedGeometry(clone)
 			clone.Anchored = true
 			clone.CanCollide = false
 			clone.CFrame = mesh.CFrame - groundOffset
