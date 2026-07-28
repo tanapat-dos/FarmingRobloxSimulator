@@ -1,12 +1,16 @@
 --!strict
 --[[
-	FishingService — server-authoritative canal fishing with a mash-F reel minigame.
+	FishingService — server-authoritative canal fishing with a Pangya-style swing-timing
+	minigame.
 
 	Client flow:
 	  1. Player enters a tagged FishingZone and presses F to cast.
-	  2. Server picks the target fish, validates zone + cooldown, and opens the reel session.
-	  3. Player spams F to fill the reel bar before the fish escapes.
-	  4. Server validates each tap and awards cash for the pre-rolled fish on success.
+	  2. Server picks the target fish, rolls a catch zone, and opens the timing session.
+	  3. A marker sweeps back and forth across a bar; player presses F ONCE when it overlaps
+	     the catch zone.
+	  4. Server independently recomputes the marker position from its own clock and validates
+	     the press. Landing inside the zone catches the fish (dead-center = Perfect payout);
+	     missing, or never pressing before the timeout, lets the fish get away.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -23,14 +27,12 @@ type FishingSession = {
 	id: string,
 	zoneId: string,
 	fishId: string,
-	progress: number,
 	startedAt: number,
 	expiresAt: number,
-	lastProgressAt: number,
-	lastTapAt: number,
-	tapCount: number,
-	tapsThisSecond: number,
-	tapWindowStart: number,
+	period: number,
+	zoneMin: number,
+	zoneMax: number,
+	resolved: boolean,
 }
 
 local Service = {}
@@ -85,39 +87,28 @@ end
 local function buildSession(zoneId: string, fishId: string): FishingSession
 	local cfg = FishingConfig.MINIGAME
 	local now = os.clock()
+	local zoneMin, zoneMax = FishingConfig.rollCatchZone()
 
 	return {
 		id = HttpService:GenerateGUID(false),
 		zoneId = zoneId,
 		fishId = fishId,
-		progress = 0,
 		startedAt = now,
 		expiresAt = now + cfg.SESSION_TIMEOUT,
-		lastProgressAt = now,
-		lastTapAt = 0,
-		tapCount = 0,
-		tapsThisSecond = 0,
-		tapWindowStart = now,
+		period = cfg.SWEEP_PERIOD_SECONDS,
+		zoneMin = zoneMin,
+		zoneMax = zoneMax,
+		resolved = false,
 	}
 end
 
-local function syncProgress(player: Player, session: FishingSession)
-	fishingRemote:FireClient(player, "progress", {
-		sessionId = session.id,
-		progress = session.progress,
-	})
-end
-
-local function awardCatch(player: Player, session: FishingSession)
+local function awardCatch(player: Player, session: FishingSession, perfect: boolean)
 	local zone = getPlayerZone(player)
 	if not zone or zone.id ~= session.zoneId then
 		fishingRemote:FireClient(player, "result", { success = false, msg = "You moved too far from the water." })
 		return
 	end
 
-	local elapsed = os.clock() - session.startedAt
-	local timeout = FishingConfig.MINIGAME.SESSION_TIMEOUT
-	local perfect = FishingConfig.isPerfectCatch(elapsed, timeout)
 	local fish = FishingConfig.getFishById(session.fishId)
 	if not fish then
 		fishingRemote:FireClient(player, "result", { success = false, msg = "Nothing bit this time." })
@@ -217,17 +208,16 @@ local function startCast(player: Player)
 		fishName = fish.displayName,
 		modelName = fish.modelName,
 		timeout = FishingConfig.MINIGAME.SESSION_TIMEOUT,
-		progress = 0,
+		period = session.period,
+		zoneMin = session.zoneMin,
+		zoneMax = session.zoneMax,
 	})
 end
 
-local function updateSessionProgress(session: FishingSession, now: number)
-	local elapsed = now - session.lastProgressAt
-	session.progress = FishingConfig.applyDecay(session.progress, elapsed)
-	session.lastProgressAt = now
-end
-
-local function registerTap(player: Player, sessionId: string)
+-- One press per session: player presses F when they see the marker overlapping the catch
+-- zone. The server recomputes the marker's position from its OWN clock (never trusts a
+-- client-sent position/progress value) and evaluates the hit.
+local function registerPress(player: Player, sessionId: string)
 	if player:GetAttribute("DataLoaded") ~= true then
 		return
 	end
@@ -235,6 +225,10 @@ local function registerTap(player: Player, sessionId: string)
 	local session = activeSessions[player]
 	if not session or session.id ~= sessionId then
 		notify(player, "That cast expired. Try again.", "error")
+		return
+	end
+
+	if session.resolved then
 		return
 	end
 
@@ -252,32 +246,25 @@ local function registerTap(player: Player, sessionId: string)
 		return
 	end
 
-	local cfg = FishingConfig.MINIGAME
-	if session.lastTapAt > 0 and (now - session.lastTapAt) < cfg.MIN_TAP_INTERVAL then
+	session.resolved = true
+
+	local elapsed = now - session.startedAt
+	local markerPosition = FishingConfig.getMarkerPosition(elapsed, session.period)
+	local hit, perfect = FishingConfig.evaluatePress(
+		markerPosition,
+		session.zoneMin,
+		session.zoneMax,
+		FishingConfig.MINIGAME.PRESS_LATENCY_FORGIVENESS
+	)
+
+	clearSession(player)
+
+	if not hit then
+		fishingRemote:FireClient(player, "result", { success = false, msg = "Missed the timing! The fish got away." })
 		return
 	end
 
-	if now - session.tapWindowStart >= 1 then
-		session.tapWindowStart = now
-		session.tapsThisSecond = 0
-	end
-	if session.tapsThisSecond >= cfg.MAX_TAPS_PER_SECOND then
-		return
-	end
-
-	updateSessionProgress(session, now)
-
-	session.progress = FishingConfig.applyTap(session.progress)
-	session.lastTapAt = now
-	session.tapCount += 1
-	session.tapsThisSecond += 1
-
-	syncProgress(player, session)
-
-	if session.progress >= 1 then
-		clearSession(player)
-		awardCatch(player, session)
-	end
+	awardCatch(player, session, perfect)
 end
 
 local function failSession(player: Player, session: FishingSession, message: string)
@@ -302,10 +289,10 @@ function Service.init()
 
 		if action == "start" then
 			startCast(player)
-		elseif action == "tap" then
+		elseif action == "press" then
 			local sessionId = payload and payload.sessionId
 			if typeof(sessionId) == "string" then
-				registerTap(player, sessionId)
+				registerPress(player, sessionId)
 			end
 		elseif action == "cancel" then
 			local sessionId = payload and payload.sessionId
@@ -332,6 +319,9 @@ function Service.init()
 		lastCastAt[player] = nil
 	end)
 
+	-- Sessions no longer stream per-frame progress (the marker sweep is fully deterministic
+	-- from startedAt+period, computed independently on both sides), so this loop only needs
+	-- to expire casts the player never pressed for.
 	task.spawn(function()
 		while true do
 			task.wait(0.25)
@@ -339,12 +329,6 @@ function Service.init()
 			for player, session in activeSessions do
 				if now > session.expiresAt then
 					failSession(player, session, "The fish got away.")
-				else
-					local previousProgress = session.progress
-					updateSessionProgress(session, now)
-					if session.progress ~= previousProgress then
-						syncProgress(player, session)
-					end
 				end
 			end
 		end

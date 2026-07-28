@@ -1,5 +1,5 @@
 --!strict
--- Shared fishing zones, fish loot, and mash-F reel minigame tuning.
+-- Shared fishing zones, fish loot, and Pangya-style swing-timing minigame tuning.
 
 export type FishingZoneDef = {
 	id: string,
@@ -24,15 +24,32 @@ FishingConfig.ZONE_TAG = "FishingZone"
 FishingConfig.STAND_TAG = "FishingStand"
 FishingConfig.FISH_MODELS_FOLDER = "FishModels"
 
+--[[
+	Swing-timing minigame (Pangya-style): a marker sweeps back and forth across a 0..1 bar.
+	The player gets ONE press per cast — press while the marker overlaps the catch zone to
+	land the fish (dead-center of the zone = Perfect, better payout); press outside the zone,
+	or never press before the timeout, and the fish gets away.
+
+	The marker's position is a deterministic function of elapsed time (see getMarkerPosition),
+	so the server never needs to stream per-frame position updates — it sends the cast's
+	startedAt/period/zone bounds once, and the client renders the same sweep locally. The
+	server independently recomputes the marker position from its own clock when validating the
+	press, so timing cannot be spoofed from the client.
+]]
 FishingConfig.MINIGAME = {
-	PROGRESS_PER_TAP = 0.085,
-	DECAY_PER_SECOND = 0.14,
-	MIN_TAP_INTERVAL = 0.07,
-	MAX_TAPS_PER_SECOND = 14,
 	CAST_COOLDOWN = 2.5,
-	SESSION_TIMEOUT = 10,
-	PERFECT_TIME_REMAINING = 3,
+	SESSION_TIMEOUT = 6, -- seconds the player has to press before the fish escapes
+	SWEEP_PERIOD_SECONDS = 1.6, -- time for one full 0 -> 1 -> 0 sweep
+	-- Catch zone width is randomized per cast (fraction of the 0..1 bar) so it can't be
+	-- memorized; narrower zones are simply harder, not tied to fish rarity.
+	ZONE_WIDTH_MIN = 0.16,
+	ZONE_WIDTH_MAX = 0.26,
+	-- Fraction of the zone's width, centered, that counts as a Perfect hit.
+	PERFECT_ZONE_FRACTION = 0.4,
 	PERFECT_PAYOUT_MULTIPLIER = 1.35,
+	-- Server-side slack added to the zone bounds when validating a press, to absorb network
+	-- latency between the client seeing "marker is in the zone" and the server processing it.
+	PRESS_LATENCY_FORGIVENESS = 0.05,
 	MAX_DISTANCE_FROM_ZONE = 18,
 	-- Tight bounds: must stand on bridge / fishing rocks (see STAND_TAG).
 	STAND_MARGIN = 3,
@@ -156,19 +173,48 @@ function FishingConfig.resolveZoneAtPosition(position: Vector3, standParts: { In
 	return bestZone
 end
 
-function FishingConfig.applyDecay(progress: number, elapsed: number): number
-	if elapsed <= 0 then
-		return progress
+-- Deterministic 0 -> 1 -> 0 -> ... triangle wave, so client and server compute the exact
+-- same marker position from (elapsed time, period) without any network sync.
+function FishingConfig.getMarkerPosition(elapsedSeconds: number, periodSeconds: number): number
+	if periodSeconds <= 0 then
+		return 0
 	end
-	return math.max(0, progress - FishingConfig.MINIGAME.DECAY_PER_SECOND * elapsed)
+	-- Map elapsed time onto a 0..2 sawtooth, then fold the 1..2 half back down to 1..0.
+	local t = (elapsedSeconds % periodSeconds) / periodSeconds * 2
+	if t <= 1 then
+		return t
+	end
+	return 2 - t
 end
 
-function FishingConfig.applyTap(progress: number): number
-	return math.min(1, progress + FishingConfig.MINIGAME.PROGRESS_PER_TAP)
+-- Rolls a random catch zone [min, max] within the 0..1 bar, sized between
+-- ZONE_WIDTH_MIN and ZONE_WIDTH_MAX, fully inside the bar.
+function FishingConfig.rollCatchZone(): (number, number)
+	local cfg = FishingConfig.MINIGAME
+	local width = math.random() * (cfg.ZONE_WIDTH_MAX - cfg.ZONE_WIDTH_MIN) + cfg.ZONE_WIDTH_MIN
+	local center = math.random() * (1 - width) + width / 2
+	return math.clamp(center - width / 2, 0, 1), math.clamp(center + width / 2, 0, 1)
 end
 
-function FishingConfig.isPerfectCatch(elapsed: number, timeout: number): boolean
-	return (timeout - elapsed) >= FishingConfig.MINIGAME.PERFECT_TIME_REMAINING
+-- Returns (hit, perfect) for a press at `markerPosition` against zone [zoneMin, zoneMax].
+-- `forgiveness` widens the zone bounds slightly to absorb client/server latency.
+function FishingConfig.evaluatePress(
+	markerPosition: number,
+	zoneMin: number,
+	zoneMax: number,
+	forgiveness: number?
+): (boolean, boolean)
+	local slack = forgiveness or 0
+	local hit = markerPosition >= (zoneMin - slack) and markerPosition <= (zoneMax + slack)
+	if not hit then
+		return false, false
+	end
+
+	local zoneCenter = (zoneMin + zoneMax) / 2
+	local zoneWidth = math.max(0.0001, zoneMax - zoneMin)
+	local perfectHalfWidth = (zoneWidth * FishingConfig.MINIGAME.PERFECT_ZONE_FRACTION) / 2
+	local perfect = math.abs(markerPosition - zoneCenter) <= perfectHalfWidth
+	return true, perfect
 end
 
 function FishingConfig.getFishById(fishId: string): FishDef?

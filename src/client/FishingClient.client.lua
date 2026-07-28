@@ -1,8 +1,11 @@
 --[[
-	FishingClient — mash-F reel minigame for canal fishing.
+	FishingClient — Pangya-style swing-timing minigame for canal fishing.
 
-	Near a FishingZone: press F to cast, then spam F to fill the reel bar
-	before the fish escapes. Shows the target fish name + 3D model preview.
+	Near a FishingZone: press F to cast. A marker sweeps back and forth across a bar; press F
+	ONCE when it overlaps the highlighted catch zone (dead-center = Perfect). Shows the target
+	fish name + 3D model preview. The marker's position is computed locally from the session's
+	startedAt/period (matching the server's own deterministic calculation), so no per-frame
+	network sync is needed — only the single press is sent to the server for validation.
 ]]
 
 local Players = game:GetService("Players")
@@ -26,9 +29,11 @@ local COLORS = {
 	panel = Color3.fromRGB(24, 30, 42),
 	panelInner = Color3.fromRGB(32, 40, 54),
 	track = Color3.fromRGB(52, 60, 78),
-	fill = Color3.fromRGB(72, 190, 120),
-	fillStroke = Color3.fromRGB(120, 230, 160),
-	goal = Color3.fromRGB(245, 248, 255),
+	zone = Color3.fromRGB(72, 190, 120),
+	zoneStroke = Color3.fromRGB(120, 230, 160),
+	zonePerfect = Color3.fromRGB(255, 205, 80),
+	marker = Color3.fromRGB(245, 248, 255),
+	markerStroke = Color3.fromRGB(30, 34, 44),
 	text = Color3.fromRGB(236, 242, 252),
 	subtext = Color3.fromRGB(170, 180, 198),
 	hint = Color3.fromRGB(130, 210, 255),
@@ -41,18 +46,19 @@ local minigameFrame: Frame? = nil
 local previewFrame: Frame? = nil
 local fishViewport: ViewportFrame? = nil
 local trackFrame: Frame? = nil
-local fillFrame: Frame? = nil
-local goalFrame: Frame? = nil
+local catchZoneFrame: Frame? = nil
+local perfectZoneFrame: Frame? = nil
+local markerFrame: Frame? = nil
 local zoneLabel: TextLabel? = nil
 local fishNameLabel: TextLabel? = nil
 local statusLabel: TextLabel? = nil
 local actionButton: TextButton? = nil
 
--- Forward-declared: buildGui wires this button to sendTap/tryStartCast, but those are declared
--- with `local function` further down the file. Without a forward declaration, referencing them
--- inside buildGui's body (which runs earlier in the file lexically) would silently resolve to
--- undeclared globals instead of the real local functions.
-local sendTap: () -> ()
+-- Forward-declared: buildGui wires this button to sendPress/tryStartCast, but those are
+-- declared with `local function` further down the file. Without a forward declaration,
+-- referencing them inside buildGui's body (which runs earlier in the file lexically) would
+-- silently resolve to undeclared globals instead of the real local functions.
+local sendPress: () -> ()
 local tryStartCast: () -> ()
 
 local previewModel: Model? = nil
@@ -62,10 +68,12 @@ local inZone = false
 local zoneName: string? = nil
 local activeSession: {
 	sessionId: string,
-	progress: number,
 	startedAt: number,
 	timeout: number,
-	lastProgressAt: number,
+	period: number,
+	zoneMin: number,
+	zoneMax: number,
+	resolved: boolean,
 	modelName: string?,
 }? = nil
 
@@ -228,7 +236,7 @@ local function buildGui()
 	statusLabel.Position = UDim2.fromOffset(132, 52)
 	statusLabel.Size = UDim2.new(1, -132, 0, 36)
 	statusLabel.BackgroundTransparency = 1
-	statusLabel.Text = "Spam [F] to reel it in"
+	statusLabel.Text = "Press [F] when the marker hits the zone!"
 	statusLabel.TextColor3 = COLORS.subtext
 	statusLabel.Font = Enum.Font.Gotham
 	statusLabel.TextSize = 15
@@ -242,36 +250,53 @@ local function buildGui()
 	trackFrame.Position = UDim2.new(0, 0, 0, 104)
 	trackFrame.Size = UDim2.new(1, 0, 0, 34)
 	trackFrame.BackgroundColor3 = COLORS.track
-	trackFrame.ClipsDescendants = true
+	trackFrame.ClipsDescendants = false
 	trackFrame.Parent = minigameFrame
 	corner(trackFrame, 10)
 
-	fillFrame = Instance.new("Frame")
-	fillFrame.Name = "Fill"
-	fillFrame.Size = UDim2.fromScale(0, 1)
-	fillFrame.BackgroundColor3 = COLORS.fill
-	fillFrame.BackgroundTransparency = 0.15
-	fillFrame.BorderSizePixel = 0
-	fillFrame.Parent = trackFrame
-	corner(fillFrame, 10)
-	stroke(fillFrame, COLORS.fillStroke, 2, 0.1)
+	-- Catch zone: a fixed highlighted band on the bar (position/width come from the server
+	-- per cast). Pressing while the marker overlaps this band catches the fish.
+	catchZoneFrame = Instance.new("Frame")
+	catchZoneFrame.Name = "CatchZone"
+	catchZoneFrame.BackgroundColor3 = COLORS.zone
+	catchZoneFrame.BackgroundTransparency = 0.2
+	catchZoneFrame.BorderSizePixel = 0
+	catchZoneFrame.ZIndex = 2
+	catchZoneFrame.Parent = trackFrame
+	corner(catchZoneFrame, 6)
+	stroke(catchZoneFrame, COLORS.zoneStroke, 2, 0.1)
 
-	goalFrame = Instance.new("Frame")
-	goalFrame.Name = "Goal"
-	goalFrame.AnchorPoint = Vector2.new(1, 0.5)
-	goalFrame.Size = UDim2.new(0, 4, 1, -8)
-	goalFrame.Position = UDim2.new(1, -4, 0.5, 0)
-	goalFrame.BackgroundColor3 = COLORS.goal
-	goalFrame.BorderSizePixel = 0
-	goalFrame.Parent = trackFrame
-	corner(goalFrame, 2)
+	-- Perfect sub-zone: centered inside the catch zone, narrower, for the bonus payout.
+	perfectZoneFrame = Instance.new("Frame")
+	perfectZoneFrame.Name = "PerfectZone"
+	perfectZoneFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	perfectZoneFrame.Position = UDim2.fromScale(0.5, 0.5)
+	perfectZoneFrame.BackgroundColor3 = COLORS.zonePerfect
+	perfectZoneFrame.BackgroundTransparency = 0.25
+	perfectZoneFrame.BorderSizePixel = 0
+	perfectZoneFrame.ZIndex = 3
+	perfectZoneFrame.Parent = catchZoneFrame
+	corner(perfectZoneFrame, 4)
+
+	-- Marker: the moving indicator that sweeps 0..1..0 across the full track.
+	markerFrame = Instance.new("Frame")
+	markerFrame.Name = "Marker"
+	markerFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	markerFrame.Size = UDim2.new(0, 6, 1, 10)
+	markerFrame.Position = UDim2.new(0, 0, 0.5, 0)
+	markerFrame.BackgroundColor3 = COLORS.marker
+	markerFrame.BorderSizePixel = 0
+	markerFrame.ZIndex = 4
+	markerFrame.Parent = trackFrame
+	corner(markerFrame, 3)
+	stroke(markerFrame, COLORS.markerStroke, 1.5, 0.1)
 
 	--[[
-		Mobile has no F key, so tapping/mashing F to cast and reel is impossible on touch.
-		This button calls the SAME tryStartCast/sendTap functions the F key uses further down
-		this file — same debounce, same remote calls — just a different input trigger. Only
-		shown when UserInputService.TouchEnabled, so PC (mouse/keyboard, and gamepad which
-		already has ButtonX support elsewhere in this codebase) never sees it.
+		Mobile has no F key, so pressing F to cast/press the timing window is impossible on
+		touch. This button calls the SAME tryStartCast/sendPress functions the F key uses
+		further down this file — same debounce, same remote calls — just a different input
+		trigger. Only shown when UserInputService.TouchEnabled, so PC (mouse/keyboard, and
+		gamepad which already has ButtonX support elsewhere in this codebase) never sees it.
 	]]
 	if UserInputService.TouchEnabled then
 		actionButton = Instance.new("TextButton")
@@ -279,7 +304,7 @@ local function buildGui()
 		actionButton.AnchorPoint = Vector2.new(0.5, 1)
 		actionButton.Position = UDim2.new(0.5, 0, 1, -180)
 		actionButton.Size = UDim2.fromOffset(160, 64)
-		actionButton.BackgroundColor3 = COLORS.fill
+		actionButton.BackgroundColor3 = COLORS.zone
 		actionButton.Text = "Cast"
 		actionButton.TextColor3 = COLORS.text
 		actionButton.Font = Enum.Font.GothamBold
@@ -287,11 +312,11 @@ local function buildGui()
 		actionButton.Visible = false
 		actionButton.Parent = gui
 		corner(actionButton, 16)
-		stroke(actionButton, COLORS.fillStroke, 2, 0.15)
+		stroke(actionButton, COLORS.zoneStroke, 2, 0.15)
 
 		actionButton.MouseButton1Click:Connect(function()
 			if activeSession then
-				sendTap()
+				sendPress()
 			else
 				tryStartCast()
 			end
@@ -332,56 +357,47 @@ local function setMinigameVisible(visible: boolean)
 		clearFishPreview()
 	end
 	if actionButton then
-		actionButton.Text = "Tap!"
+		actionButton.Text = "Press!"
 		actionButton.Visible = visible
 	end
 	updateHint()
 end
 
-local function applyLocalDecay()
-	if not activeSession then
-		return
-	end
-
-	local now = os.clock()
-	local elapsed = now - activeSession.lastProgressAt
-	if elapsed <= 0 then
-		return
-	end
-
-	activeSession.progress = FishingConfig.applyDecay(activeSession.progress, elapsed)
-	activeSession.lastProgressAt = now
-end
-
-local function setProgress(progress: number)
-	if not activeSession then
-		return
-	end
-
-	activeSession.progress = math.clamp(progress, 0, 1)
-	activeSession.lastProgressAt = os.clock()
-end
-
+-- Renders the catch zone / perfect sub-zone (fixed for the session) and the sweeping marker
+-- (computed locally from elapsed time — same deterministic formula the server uses).
 local function renderMinigame()
-	if not activeSession or not fillFrame or not statusLabel then
+	if not activeSession or not statusLabel then
 		return
 	end
 
-	fillFrame.Size = UDim2.new(activeSession.progress, 0, 1, 0)
+	if catchZoneFrame then
+		local width = activeSession.zoneMax - activeSession.zoneMin
+		catchZoneFrame.Size = UDim2.new(width, 0, 1, 0)
+		catchZoneFrame.Position = UDim2.new(activeSession.zoneMin, 0, 0, 0)
+	end
+	if perfectZoneFrame then
+		perfectZoneFrame.Size = UDim2.new(FishingConfig.MINIGAME.PERFECT_ZONE_FRACTION, 0, 1, -6)
+	end
 
 	local elapsed = os.clock() - activeSession.startedAt
+	local markerPosition = FishingConfig.getMarkerPosition(elapsed, activeSession.period)
+	if markerFrame then
+		markerFrame.Position = UDim2.new(markerPosition, 0, 0.5, 0)
+	end
+
 	local remaining = math.max(0, activeSession.timeout - elapsed)
-	local percent = math.floor(activeSession.progress * 100 + 0.5)
-	statusLabel.Text = `Spam [F] to reel it in  •  {percent}%  •  {string.format("%.1f", remaining)}s left`
+	statusLabel.Text = `Press [F] when the marker hits the zone!  •  {string.format("%.1f", remaining)}s left`
 end
 
 local function beginMinigame(payload: any)
 	activeSession = {
 		sessionId = payload.sessionId,
-		progress = payload.progress or 0,
 		startedAt = os.clock(),
 		timeout = payload.timeout or FishingConfig.MINIGAME.SESSION_TIMEOUT,
-		lastProgressAt = os.clock(),
+		period = payload.period or FishingConfig.MINIGAME.SWEEP_PERIOD_SECONDS,
+		zoneMin = payload.zoneMin or 0.4,
+		zoneMax = payload.zoneMax or 0.6,
+		resolved = false,
 		modelName = payload.modelName,
 	}
 
@@ -394,7 +410,7 @@ local function beginMinigame(payload: any)
 	end
 	if statusLabel then
 		statusLabel.TextColor3 = COLORS.subtext
-		statusLabel.Text = "Spam [F] to reel it in"
+		statusLabel.Text = "Press [F] when the marker hits the zone!"
 	end
 
 	showFishPreview(payload.modelName)
@@ -410,15 +426,16 @@ local function endMinigame()
 	updateHint()
 end
 
-sendTap = function()
-	if not activeSession then
+sendPress = function()
+	if not activeSession or activeSession.resolved then
 		return
 	end
 
-	applyLocalDecay()
-	setProgress(FishingConfig.applyTap(activeSession.progress))
-	renderMinigame()
-	fishingRemote:FireServer("tap", {
+	-- One press per session — mark resolved immediately so a double-press (e.g. holding the
+	-- touch button, or F auto-repeat) can't fire a second attempt while waiting on the
+	-- server's "result" response.
+	activeSession.resolved = true
+	fishingRemote:FireServer("press", {
 		sessionId = activeSession.sessionId,
 	})
 end
@@ -433,11 +450,6 @@ end
 fishingRemote.OnClientEvent:Connect(function(action: string, payload: any)
 	if action == "startMinigame" then
 		beginMinigame(payload)
-	elseif action == "progress" then
-		if activeSession and payload and payload.sessionId == activeSession.sessionId then
-			setProgress(payload.progress or 0)
-			renderMinigame()
-		end
 	elseif action == "result" then
 		endMinigame()
 	end
@@ -458,7 +470,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 
 	if activeSession then
-		sendTap()
+		sendPress()
 	else
 		tryStartCast()
 	end
@@ -469,7 +481,6 @@ RunService.RenderStepped:Connect(function(dt)
 	updateHint()
 
 	if activeSession then
-		applyLocalDecay()
 		renderMinigame()
 
 		if previewModel and previewModel.PrimaryPart then
