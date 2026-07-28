@@ -10,7 +10,9 @@
       "autoApprove": [
         "query_instances",
         "manage_selection",
-        "system_info"
+        "system_info",
+        "manage_properties",
+        "manage_properties"
       ]
     }
   }
