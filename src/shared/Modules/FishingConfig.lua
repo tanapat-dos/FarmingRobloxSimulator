@@ -40,6 +40,7 @@ FishingConfig.MINIGAME = {
 	CAST_COOLDOWN = 2.5,
 	SESSION_TIMEOUT = 6, -- seconds the player has to press before the fish escapes
 	SWEEP_PERIOD_SECONDS = 1.6, -- time for one full 0 -> 1 -> 0 sweep
+	MAX_ATTEMPTS = 3, -- presses allowed per cast; miss all 3 and the fish escapes
 	-- Catch zone width is randomized per cast (fraction of the 0..1 bar) so it can't be
 	-- memorized; narrower zones are simply harder, not tied to fish rarity.
 	ZONE_WIDTH_MIN = 0.16,

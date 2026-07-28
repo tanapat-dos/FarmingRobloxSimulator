@@ -33,6 +33,7 @@ type FishingSession = {
 	zoneMin: number,
 	zoneMax: number,
 	resolved: boolean,
+	attemptsUsed: number,
 }
 
 local Service = {}
@@ -99,6 +100,7 @@ local function buildSession(zoneId: string, fishId: string): FishingSession
 		zoneMin = zoneMin,
 		zoneMax = zoneMax,
 		resolved = false,
+		attemptsUsed = 0,
 	}
 end
 
@@ -211,6 +213,7 @@ local function startCast(player: Player)
 		period = session.period,
 		zoneMin = session.zoneMin,
 		zoneMax = session.zoneMax,
+		maxAttempts = FishingConfig.MINIGAME.MAX_ATTEMPTS,
 	})
 end
 
@@ -246,7 +249,7 @@ local function registerPress(player: Player, sessionId: string)
 		return
 	end
 
-	session.resolved = true
+	session.attemptsUsed += 1
 
 	local elapsed = now - session.startedAt
 	local markerPosition = FishingConfig.getMarkerPosition(elapsed, session.period)
@@ -257,14 +260,27 @@ local function registerPress(player: Player, sessionId: string)
 		FishingConfig.MINIGAME.PRESS_LATENCY_FORGIVENESS
 	)
 
-	clearSession(player)
-
-	if not hit then
-		fishingRemote:FireClient(player, "result", { success = false, msg = "Missed the timing! The fish got away." })
+	if hit then
+		session.resolved = true
+		clearSession(player)
+		awardCatch(player, session, perfect)
 		return
 	end
 
-	awardCatch(player, session, perfect)
+	-- Missed — check remaining attempts
+	local maxAttempts = FishingConfig.MINIGAME.MAX_ATTEMPTS
+	local remaining = maxAttempts - session.attemptsUsed
+	if remaining <= 0 then
+		session.resolved = true
+		clearSession(player)
+		fishingRemote:FireClient(player, "result", { success = false, msg = "Missed all attempts! The fish got away." })
+	else
+		-- Tell the client how many attempts remain so it can update the UI
+		fishingRemote:FireClient(player, "miss", {
+			sessionId = session.id,
+			attemptsLeft = remaining,
+		})
+	end
 end
 
 local function failSession(player: Player, session: FishingSession, message: string)

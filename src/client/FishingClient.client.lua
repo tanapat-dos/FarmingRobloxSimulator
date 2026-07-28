@@ -75,6 +75,8 @@ local activeSession: {
 	zoneMax: number,
 	resolved: boolean,
 	modelName: string?,
+	maxAttempts: number,
+	attemptsUsed: number,
 }? = nil
 
 local zoneRefreshAccumulator = 0
@@ -386,7 +388,8 @@ local function renderMinigame()
 	end
 
 	local remaining = math.max(0, activeSession.timeout - elapsed)
-	statusLabel.Text = `Press [F] when the marker hits the zone!  •  {string.format("%.1f", remaining)}s left`
+	local attemptsLeft = activeSession.maxAttempts - activeSession.attemptsUsed
+	statusLabel.Text = `Press [F] when the marker hits the zone!  •  {attemptsLeft} attempt{if attemptsLeft == 1 then "" else "s"} left  •  {string.format("%.1f", remaining)}s`
 end
 
 local function beginMinigame(payload: any)
@@ -399,6 +402,8 @@ local function beginMinigame(payload: any)
 		zoneMax = payload.zoneMax or 0.6,
 		resolved = false,
 		modelName = payload.modelName,
+		maxAttempts = payload.maxAttempts or FishingConfig.MINIGAME.MAX_ATTEMPTS,
+		attemptsUsed = 0,
 	}
 
 	if zoneLabel then
@@ -431,10 +436,13 @@ sendPress = function()
 		return
 	end
 
-	-- One press per session — mark resolved immediately so a double-press (e.g. holding the
-	-- touch button, or F auto-repeat) can't fire a second attempt while waiting on the
-	-- server's "result" response.
-	activeSession.resolved = true
+	-- Increment local attempt count optimistically (server is the authority, but this
+	-- prevents spamming extra presses faster than the server can respond).
+	activeSession.attemptsUsed += 1
+	if activeSession.attemptsUsed >= activeSession.maxAttempts then
+		activeSession.resolved = true
+	end
+
 	fishingRemote:FireServer("press", {
 		sessionId = activeSession.sessionId,
 	})
@@ -450,6 +458,12 @@ end
 fishingRemote.OnClientEvent:Connect(function(action: string, payload: any)
 	if action == "startMinigame" then
 		beginMinigame(payload)
+	elseif action == "miss" then
+		-- Server confirmed the press missed but the session is still alive (attempts remain).
+		if activeSession and payload and payload.sessionId == activeSession.sessionId then
+			activeSession.attemptsUsed = activeSession.maxAttempts - (payload.attemptsLeft or 0)
+			activeSession.resolved = false -- ensure client doesn't lock out early
+		end
 	elseif action == "result" then
 		endMinigame()
 	end
