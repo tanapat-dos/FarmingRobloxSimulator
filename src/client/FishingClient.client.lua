@@ -12,13 +12,16 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local FishingConfig = require(ReplicatedStorage:WaitForChild("Modules").FishingConfig)
 local FishingStandRegistry = require(ReplicatedStorage:WaitForChild("Modules").FishingStandRegistry)
 local FishingModelPreview = require(ReplicatedStorage:WaitForChild("Modules").FishingModelPreview)
+local SeedRarity = require(ReplicatedStorage:WaitForChild("Modules").SeedRarity)
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+local sounds = ReplicatedStorage:WaitForChild("Sounds")
 local fishingRemote = remotes:WaitForChild("Fishing", 30)
 if not fishingRemote then
 	warn("[FishingClient] Missing RemoteEvents.Fishing — is FishingService synced to Studio?")
@@ -38,7 +41,39 @@ local COLORS = {
 	subtext = Color3.fromRGB(170, 180, 198),
 	hint = Color3.fromRGB(130, 210, 255),
 	fishName = Color3.fromRGB(144, 220, 255),
+	miss = Color3.fromRGB(235, 90, 90),
+	pipFilled = Color3.fromRGB(255, 255, 255),
+	pipEmpty = Color3.fromRGB(60, 68, 84),
 }
+
+local RARITY_FALLBACK_COLOR = Color3.fromRGB(200, 200, 200)
+
+local function getRarityColor(rarity: string?): Color3
+	local value = rarity and SeedRarity[rarity]
+	if typeof(value) == "Color3" then
+		return value
+	end
+	return RARITY_FALLBACK_COLOR
+end
+
+-- Plays a one-shot clone of a Sounds/<name> template so overlapping plays don't cut each
+-- other off. Silently no-ops if the template is missing rather than erroring the whole file.
+local function playSound(name: string, volume: number?, pitch: number?)
+	local template = sounds:FindFirstChild(name)
+	if not (template and template:IsA("Sound")) then
+		return
+	end
+	local sound = template:Clone()
+	sound.Volume = volume or template.Volume
+	if pitch then
+		sound.PlaybackSpeed = pitch
+	end
+	sound.Parent = player:WaitForChild("PlayerGui")
+	sound:Play()
+	sound.Ended:Once(function()
+		sound:Destroy()
+	end)
+end
 
 local gui: ScreenGui? = nil
 local hintLabel: TextLabel? = nil
@@ -53,6 +88,12 @@ local zoneLabel: TextLabel? = nil
 local fishNameLabel: TextLabel? = nil
 local statusLabel: TextLabel? = nil
 local actionButton: TextButton? = nil
+local timerBarFrame: Frame? = nil
+local timerFillFrame: Frame? = nil
+local pipsContainer: Frame? = nil
+local pipFrames: { Frame } = {}
+local revealGui: ScreenGui? = nil
+local dismissActiveReveal: (() -> ())? = nil
 
 -- Forward-declared: buildGui wires this button to sendPress/tryStartCast, but those are
 -- declared with `local function` further down the file. Without a forward declaration,
@@ -175,7 +216,7 @@ local function buildGui()
 	minigameFrame.Name = "Minigame"
 	minigameFrame.AnchorPoint = Vector2.new(0.5, 1)
 	minigameFrame.Position = UDim2.new(0.5, 0, 1, -36)
-	minigameFrame.Size = UDim2.fromOffset(560, 188)
+	minigameFrame.Size = UDim2.fromOffset(560, 208)
 	minigameFrame.BackgroundColor3 = COLORS.panel
 	minigameFrame.Visible = false
 	minigameFrame.Parent = gui
@@ -236,7 +277,7 @@ local function buildGui()
 	statusLabel = Instance.new("TextLabel")
 	statusLabel.Name = "Status"
 	statusLabel.Position = UDim2.fromOffset(132, 52)
-	statusLabel.Size = UDim2.new(1, -132, 0, 36)
+	statusLabel.Size = UDim2.new(1, -132, 0, 22)
 	statusLabel.BackgroundTransparency = 1
 	statusLabel.Text = "Press [F] when the marker hits the zone!"
 	statusLabel.TextColor3 = COLORS.subtext
@@ -247,9 +288,44 @@ local function buildGui()
 	statusLabel.TextWrapped = true
 	statusLabel.Parent = minigameFrame
 
+	-- Attempt pips: small dots, one per MAX_ATTEMPTS, filled in from the left. Reads at a
+	-- glance ("2 of 3 left") without parsing a sentence, and each miss visibly snuffs one out.
+	pipsContainer = Instance.new("Frame")
+	pipsContainer.Name = "Pips"
+	pipsContainer.Position = UDim2.fromOffset(132, 76)
+	pipsContainer.Size = UDim2.fromOffset(120, 14)
+	pipsContainer.BackgroundTransparency = 1
+	pipsContainer.Parent = minigameFrame
+
+	local pipsLayout = Instance.new("UIListLayout")
+	pipsLayout.FillDirection = Enum.FillDirection.Horizontal
+	pipsLayout.Padding = UDim.new(0, 6)
+	pipsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	pipsLayout.Parent = pipsContainer
+
+	-- Countdown bar: a shrinking strip under the pips gives the timeout urgency a visible,
+	-- glanceable shape instead of only the "3.2s" text ticking down.
+	timerBarFrame = Instance.new("Frame")
+	timerBarFrame.Name = "TimerBar"
+	timerBarFrame.Position = UDim2.fromOffset(132, 96)
+	timerBarFrame.Size = UDim2.new(1, -132, 0, 5)
+	timerBarFrame.BackgroundColor3 = COLORS.track
+	timerBarFrame.BorderSizePixel = 0
+	timerBarFrame.ClipsDescendants = true
+	timerBarFrame.Parent = minigameFrame
+	corner(timerBarFrame, 3)
+
+	timerFillFrame = Instance.new("Frame")
+	timerFillFrame.Name = "Fill"
+	timerFillFrame.Size = UDim2.fromScale(1, 1)
+	timerFillFrame.BackgroundColor3 = COLORS.zone
+	timerFillFrame.BorderSizePixel = 0
+	timerFillFrame.Parent = timerBarFrame
+	corner(timerFillFrame, 3)
+
 	trackFrame = Instance.new("Frame")
 	trackFrame.Name = "Track"
-	trackFrame.Position = UDim2.new(0, 0, 0, 104)
+	trackFrame.Position = UDim2.new(0, 0, 0, 112)
 	trackFrame.Size = UDim2.new(1, 0, 0, 34)
 	trackFrame.BackgroundColor3 = COLORS.track
 	trackFrame.ClipsDescendants = false
@@ -365,6 +441,60 @@ local function setMinigameVisible(visible: boolean)
 	updateHint()
 end
 
+-- (Re)builds the attempt-pip row for the current session's maxAttempts. Called once per cast
+-- rather than every frame since the count is fixed for the session's lifetime.
+local function buildPips(maxAttempts: number)
+	if not pipsContainer then
+		return
+	end
+	for _, pip in pipFrames do
+		pip:Destroy()
+	end
+	table.clear(pipFrames)
+
+	for i = 1, maxAttempts do
+		local pip = Instance.new("Frame")
+		pip.Name = "Pip" .. i
+		pip.LayoutOrder = i
+		pip.Size = UDim2.fromOffset(14, 14)
+		pip.BackgroundColor3 = COLORS.pipFilled
+		pip.BorderSizePixel = 0
+		pip.Parent = pipsContainer
+		corner(pip, 7)
+		table.insert(pipFrames, pip)
+	end
+end
+
+-- Snuffs out the pip for the attempt that was just used (left to right), with a quick shrink.
+local function popPip(attemptsUsed: number)
+	local pip = pipFrames[attemptsUsed]
+	if not pip then
+		return
+	end
+	pip.BackgroundColor3 = COLORS.miss
+	TweenService:Create(pip, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		BackgroundColor3 = COLORS.pipEmpty,
+	}):Play()
+	local scale = pip:FindFirstChildWhichIsA("UIScale") or Instance.new("UIScale")
+	scale.Parent = pip
+	scale.Scale = 1
+	TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In), { Scale = 0.55 }):Play()
+end
+
+-- Quick red flash across the track on a miss — the "ouch, so close" cue that mashing gave for
+-- free and single-press timing needs an explicit substitute for.
+local function flashTrackMiss()
+	if not trackFrame then
+		return
+	end
+	local original = trackFrame.BackgroundColor3
+	trackFrame.BackgroundColor3 = COLORS.miss
+	TweenService:Create(trackFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundColor3 = original,
+	}):Play()
+	playSound("Click", 0.4, 0.7)
+end
+
 -- Renders the catch zone / perfect sub-zone (fixed for the session) and the sweeping marker
 -- (computed locally from elapsed time — same deterministic formula the server uses).
 local function renderMinigame()
@@ -388,8 +518,11 @@ local function renderMinigame()
 	end
 
 	local remaining = math.max(0, activeSession.timeout - elapsed)
-	local attemptsLeft = activeSession.maxAttempts - activeSession.attemptsUsed
-	statusLabel.Text = `Press [F] when the marker hits the zone!  •  {attemptsLeft} attempt{if attemptsLeft == 1 then "" else "s"} left  •  {string.format("%.1f", remaining)}s`
+	if timerFillFrame then
+		timerFillFrame.Size = UDim2.fromScale(math.clamp(remaining / activeSession.timeout, 0, 1), 1)
+		timerFillFrame.BackgroundColor3 = if remaining <= 1.5 then COLORS.miss else COLORS.zone
+	end
+	statusLabel.Text = "Press [F] when the marker hits the zone!"
 end
 
 local function beginMinigame(payload: any)
@@ -424,9 +557,11 @@ local function beginMinigame(payload: any)
 
 	showFishPreview(payload.modelName)
 	previewSpin = 0
+	buildPips(activeSession.maxAttempts)
 
 	setMinigameVisible(true)
 	renderMinigame()
+	playSound("Click", 0.5, 1.15)
 end
 
 local function endMinigame()
@@ -459,6 +594,301 @@ tryStartCast = function()
 	fishingRemote:FireServer("start")
 end
 
+--[[
+	Catch reveal — a full-screen popup so landing a fish actually feels like a payoff instead
+	of the minigame panel just quietly closing. Sequence:
+	  1. Dim the screen, fish model pops in with an overshoot bounce (Back easing) inside a
+	     rarity-colored glow ring, spinning slowly.
+	  2. Fish name + rarity badge fade in; "PERFECT!" banner only for a centered hit.
+	  3. Cash/Fish Coin rewards count up from 0 rather than snapping in.
+	  4. Auto-dismisses after a few seconds, or immediately on click/F/Enter.
+	Best-effort: any failure here must never break the fishing loop itself, so it's wrapped in
+	pcall by its only caller.
+]]
+local function buildCatchReveal(payload: any)
+	if revealGui then
+		revealGui:Destroy()
+		revealGui = nil
+	end
+
+	local rarityColor = getRarityColor(payload.rarity)
+	local perfect = payload.perfect == true
+
+	local revealScreenGui = Instance.new("ScreenGui")
+	revealScreenGui.Name = "FishingCatchReveal"
+	revealScreenGui.ResetOnSpawn = false
+	revealScreenGui.IgnoreGuiInset = true
+	revealScreenGui.DisplayOrder = 60
+	revealScreenGui.Parent = player:WaitForChild("PlayerGui")
+	revealGui = revealScreenGui
+
+	local dim = Instance.new("Frame")
+	dim.Name = "Dim"
+	dim.Size = UDim2.fromScale(1, 1)
+	dim.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.Active = true -- plain Frames only fire InputBegan when Active, needed for click-to-dismiss
+	dim.Parent = revealScreenGui
+
+	local card = Instance.new("Frame")
+	card.Name = "Card"
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.Size = UDim2.fromOffset(360, 420)
+	card.BackgroundColor3 = COLORS.panel
+	card.BorderSizePixel = 0
+	card.Active = true
+	card.Parent = revealScreenGui
+	corner(card, 20)
+	stroke(card, rarityColor, 3, 0.1)
+
+	local cardScale = Instance.new("UIScale")
+	cardScale.Scale = 0.5
+	cardScale.Parent = card
+
+	local rarityLabel = Instance.new("TextLabel")
+	rarityLabel.Name = "Rarity"
+	rarityLabel.AnchorPoint = Vector2.new(0.5, 0)
+	rarityLabel.Position = UDim2.new(0.5, 0, 0, 16)
+	rarityLabel.Size = UDim2.fromOffset(160, 24)
+	rarityLabel.BackgroundColor3 = rarityColor
+	rarityLabel.BackgroundTransparency = 0.1
+	rarityLabel.Text = string.upper(payload.rarity or "Common")
+	rarityLabel.TextColor3 = Color3.fromRGB(20, 20, 24)
+	rarityLabel.Font = Enum.Font.GothamBlack
+	rarityLabel.TextSize = 14
+	rarityLabel.TextTransparency = 1
+	rarityLabel.BackgroundTransparency = 1
+	rarityLabel.Parent = card
+	corner(rarityLabel, 12)
+
+	-- Glow ring behind the viewport: a soft rarity-colored halo that pulses once on arrival.
+	local glow = Instance.new("Frame")
+	glow.Name = "Glow"
+	glow.AnchorPoint = Vector2.new(0.5, 0.5)
+	glow.Position = UDim2.new(0.5, 0, 0, 150)
+	glow.Size = UDim2.fromOffset(200, 200)
+	glow.BackgroundColor3 = rarityColor
+	glow.BackgroundTransparency = 1
+	glow.BorderSizePixel = 0
+	glow.Parent = card
+	corner(glow, 100)
+
+	local viewportHolder = Instance.new("Frame")
+	viewportHolder.Name = "ViewportHolder"
+	viewportHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+	viewportHolder.Position = UDim2.new(0.5, 0, 0, 150)
+	viewportHolder.Size = UDim2.fromOffset(190, 190)
+	viewportHolder.BackgroundColor3 = COLORS.panelInner
+	viewportHolder.BorderSizePixel = 0
+	viewportHolder.Parent = card
+	corner(viewportHolder, 95)
+	stroke(viewportHolder, rarityColor, 2, 0.3)
+
+	local viewportScale = Instance.new("UIScale")
+	viewportScale.Scale = 0.3
+	viewportScale.Parent = viewportHolder
+
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Name = "Viewport"
+	viewport.Size = UDim2.new(1, -12, 1, -12)
+	viewport.Position = UDim2.fromOffset(6, 6)
+	viewport.BackgroundTransparency = 1
+	viewport.Ambient = Color3.fromRGB(210, 215, 230)
+	viewport.LightColor = Color3.fromRGB(255, 255, 255)
+	viewport.LightDirection = Vector3.new(-0.35, -0.8, -0.5)
+	viewport.Parent = viewportHolder
+	corner(viewport, 90)
+
+	local revealModel = if payload.modelName then FishingModelPreview.mount(viewport, payload.modelName) else nil
+
+	local perfectBanner = Instance.new("TextLabel")
+	perfectBanner.Name = "PerfectBanner"
+	perfectBanner.AnchorPoint = Vector2.new(0.5, 0)
+	perfectBanner.Position = UDim2.new(0.5, 0, 0, 250)
+	perfectBanner.Size = UDim2.fromOffset(260, 30)
+	perfectBanner.BackgroundTransparency = 1
+	perfectBanner.Text = "★ PERFECT CATCH! ★"
+	perfectBanner.TextColor3 = COLORS.zonePerfect
+	perfectBanner.Font = Enum.Font.GothamBlack
+	perfectBanner.TextSize = 20
+	perfectBanner.TextTransparency = 1
+	perfectBanner.Visible = perfect
+	perfectBanner.Parent = card
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "FishName"
+	nameLabel.AnchorPoint = Vector2.new(0.5, 0)
+	nameLabel.Position = UDim2.new(0.5, 0, 0, perfect and 284 or 256)
+	nameLabel.Size = UDim2.fromOffset(320, 32)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = payload.fishName or "Fish"
+	nameLabel.TextColor3 = COLORS.text
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 26
+	nameLabel.TextTransparency = 1
+	nameLabel.Parent = card
+
+	local rewardLabel = Instance.new("TextLabel")
+	rewardLabel.Name = "Reward"
+	rewardLabel.AnchorPoint = Vector2.new(0.5, 0)
+	rewardLabel.Position = UDim2.new(0.5, 0, 0, (perfect and 284 or 256) + 38)
+	rewardLabel.Size = UDim2.fromOffset(320, 28)
+	rewardLabel.BackgroundTransparency = 1
+	rewardLabel.Text = "+$0"
+	rewardLabel.TextColor3 = Color3.fromRGB(120, 230, 140)
+	rewardLabel.Font = Enum.Font.GothamBold
+	rewardLabel.TextSize = 20
+	rewardLabel.TextTransparency = 1
+	rewardLabel.Parent = card
+
+	local closeHint = Instance.new("TextLabel")
+	closeHint.Name = "CloseHint"
+	closeHint.AnchorPoint = Vector2.new(0.5, 1)
+	closeHint.Position = UDim2.new(0.5, 0, 1, -14)
+	closeHint.Size = UDim2.fromOffset(260, 20)
+	closeHint.BackgroundTransparency = 1
+	closeHint.Text = "click anywhere to continue"
+	closeHint.TextColor3 = COLORS.subtext
+	closeHint.Font = Enum.Font.Gotham
+	closeHint.TextSize = 13
+	closeHint.TextTransparency = 1
+	closeHint.Parent = card
+
+	-- ---------------------------------------------------------------- animation sequence
+	playSound("Coins", 0.6, perfect and 1.15 or 1)
+
+	TweenService:Create(dim, TweenInfo.new(0.2), { BackgroundTransparency = 0.5 }):Play()
+	TweenService:Create(cardScale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+
+	-- Fish model pop: overshoot-bounce in, slightly delayed after the card so it reads as a
+	-- distinct "reveal" beat rather than everything arriving at once.
+	task.delay(0.12, function()
+		if not viewportHolder.Parent then
+			return
+		end
+		playSound("Purchase", 0.5, 1.3)
+		TweenService:Create(viewportScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		local glowTween = TweenService:Create(glow, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 0.55,
+		})
+		glowTween:Play()
+		glowTween.Completed:Connect(function()
+			TweenService:Create(glow, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				BackgroundTransparency = 1,
+			}):Play()
+		end)
+	end)
+
+	task.delay(0.3, function()
+		if not rarityLabel.Parent then
+			return
+		end
+		TweenService:Create(rarityLabel, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
+		if perfect then
+			TweenService:Create(perfectBanner, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
+		end
+		TweenService:Create(nameLabel, TweenInfo.new(0.25), { TextTransparency = 0 }):Play()
+	end)
+
+	-- Reward count-up: ticks from 0 to the final amount instead of snapping straight to it.
+	task.delay(0.45, function()
+		if not rewardLabel.Parent then
+			return
+		end
+		TweenService:Create(rewardLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
+		local finalReward = tonumber(payload.reward) or 0
+		local finalCoins = tonumber(payload.fishCoins) or 0
+		local duration = 0.5
+		local startTime = os.clock()
+		local conn: RBXScriptConnection
+		conn = RunService.RenderStepped:Connect(function()
+			local alpha = math.clamp((os.clock() - startTime) / duration, 0, 1)
+			local shownReward = math.floor(finalReward * alpha)
+			local shownCoins = math.floor(finalCoins * alpha)
+			if not rewardLabel.Parent then
+				conn:Disconnect()
+				return
+			end
+			rewardLabel.Text = if finalCoins > 0
+				then `+$%d  •  +🐟%d`:format(shownReward, shownCoins)
+				else `+$%d`:format(shownReward)
+			if alpha >= 1 then
+				conn:Disconnect()
+			end
+		end)
+	end)
+
+	task.delay(0.6, function()
+		if closeHint.Parent then
+			TweenService:Create(closeHint, TweenInfo.new(0.3), { TextTransparency = 0.4 }):Play()
+		end
+	end)
+
+	-- ---------------------------------------------------------------- dismissal
+	local dismissed = Instance.new("BindableEvent")
+	local closedAlready = false
+	local function requestClose()
+		if closedAlready then
+			return
+		end
+		closedAlready = true
+		dismissActiveReveal = nil
+		dismissed:Fire()
+	end
+	dismissActiveReveal = requestClose
+
+	dim.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			requestClose()
+		end
+	end)
+	card.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			requestClose()
+		end
+	end)
+
+	local autoCloseDelay = if perfect then 4.5 else 3.5
+	task.delay(autoCloseDelay, requestClose)
+
+	local spin = 0
+	local spinConn: RBXScriptConnection
+	spinConn = RunService.RenderStepped:Connect(function(dt)
+		if revealModel and revealModel.PrimaryPart then
+			spin += dt * 0.6
+			local pivot = revealModel:GetPivot()
+			revealModel:PivotTo(CFrame.new(pivot.Position) * CFrame.Angles(0, spin, 0))
+		end
+	end)
+
+	dismissed.Event:Wait()
+	spinConn:Disconnect()
+
+	local fadeOut = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	TweenService:Create(dim, fadeOut, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(cardScale, fadeOut, { Scale = 0.8 }):Play()
+	task.wait(0.25)
+	if revealGui == revealScreenGui then
+		revealGui = nil
+	end
+	revealScreenGui:Destroy()
+end
+
+local function showCatchReveal(payload: any)
+	task.spawn(function()
+		local ok, err = pcall(buildCatchReveal, payload)
+		if not ok then
+			warn("[FishingClient] Catch reveal failed:", err)
+			if revealGui then
+				revealGui:Destroy()
+				revealGui = nil
+			end
+		end
+	end)
+end
+
 fishingRemote.OnClientEvent:Connect(function(action: string, payload: any)
 	if action == "startMinigame" then
 		beginMinigame(payload)
@@ -467,13 +897,27 @@ fishingRemote.OnClientEvent:Connect(function(action: string, payload: any)
 		if activeSession and payload and payload.sessionId == activeSession.sessionId then
 			activeSession.attemptsUsed = activeSession.maxAttempts - (payload.attemptsLeft or 0)
 			activeSession.resolved = false -- ensure client doesn't lock out early
+			popPip(activeSession.attemptsUsed)
+			flashTrackMiss()
 		end
 	elseif action == "result" then
 		endMinigame()
+		if payload and payload.success then
+			showCatchReveal(payload)
+		end
 	end
 end)
 
 UserInputService.InputBegan:Connect(function(input, processed)
+	if dismissActiveReveal and (
+		input.KeyCode == Enum.KeyCode.F
+		or input.KeyCode == Enum.KeyCode.Return
+		or input.KeyCode == Enum.KeyCode.Space
+	) then
+		dismissActiveReveal()
+		return
+	end
+
 	if input.KeyCode ~= Enum.KeyCode.F then
 		if input.KeyCode == Enum.KeyCode.Escape and activeSession then
 			local sessionId = activeSession.sessionId

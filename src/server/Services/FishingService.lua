@@ -155,6 +155,8 @@ local function awardCatch(player: Player, session: FishingSession, perfect: bool
 		perfect = perfect,
 		fishId = fish.id,
 		fishName = fish.displayName,
+		modelName = fish.modelName,
+		rarity = fish.rarity,
 		reward = paid,
 		fishCoins = coinsAwarded,
 		msg = msg,
@@ -246,14 +248,18 @@ local function registerPress(player: Player, sessionId: string)
 	local now = FishingConfig.now()
 	if now > session.expiresAt then
 		clearSession(player)
-		fishingRemote:FireClient(player, "result", { success = false, msg = "Too slow! The fish got away." })
+		local msg = "Too slow! The fish got away."
+		fishingRemote:FireClient(player, "result", { success = false, msg = msg })
+		notify(player, msg, "error")
 		return
 	end
 
 	local zone = getPlayerZone(player)
 	if not zone or zone.id ~= session.zoneId then
 		clearSession(player)
-		fishingRemote:FireClient(player, "result", { success = false, msg = "You moved too far from the water." })
+		local msg = "You moved too far from the water."
+		fishingRemote:FireClient(player, "result", { success = false, msg = msg })
+		notify(player, msg, "error")
 		return
 	end
 
@@ -295,9 +301,13 @@ local function registerPress(player: Player, sessionId: string)
 	if remaining <= 0 then
 		session.resolved = true
 		clearSession(player)
-		fishingRemote:FireClient(player, "result", { success = false, msg = "Missed all attempts! The fish got away." })
+		local msg = "Missed all attempts! The fish got away."
+		fishingRemote:FireClient(player, "result", { success = false, msg = msg })
+		notify(player, msg, "error")
 	else
-		-- Tell the client how many attempts remain so it can update the UI
+		-- Tell the client how many attempts remain so it can update the UI. "miss" (not
+		-- "result") — the client plays a quick shake/red-flash cue but keeps the minigame
+		-- open, since the cast itself is still alive.
 		fishingRemote:FireClient(player, "miss", {
 			sessionId = session.id,
 			attemptsLeft = remaining,
@@ -308,6 +318,7 @@ end
 local function failSession(player: Player, session: FishingSession, message: string)
 	clearSession(player)
 	fishingRemote:FireClient(player, "result", { success = false, msg = message })
+	notify(player, message, "error")
 end
 
 local function cancelCast(player: Player, sessionId: string)

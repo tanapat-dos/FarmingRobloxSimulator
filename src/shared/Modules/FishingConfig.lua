@@ -16,6 +16,7 @@ export type FishDef = {
 	modelName: string,
 	value: number,
 	weight: number,
+	rarity: string,
 }
 
 local FishingConfig = {}
@@ -100,13 +101,15 @@ FishingConfig.ZONES = {
 } :: { FishingZoneDef }
 
 -- Meshes live in ReplicatedStorage.Assets.FishModels (saltwater pack asset 10851288693).
+-- `rarity` reuses the same tier names as SeedRarity (Common/Uncommon/Rare/Epic/Legendary) so
+-- the catch-reveal popup can share that module's color palette instead of a one-off.
 FishingConfig.FISH = {
-	{ id = "saupe", displayName = "Saupe Fish", modelName = "Saupe Fish", value = 20, weight = 45 },
-	{ id = "blue_fish", displayName = "Blue Fish", modelName = "Blue Fish", value = 35, weight = 30 },
-	{ id = "mullet", displayName = "Mullet", modelName = "Mullet", value = 55, weight = 18 },
-	{ id = "cod", displayName = "Cod", modelName = "Cod", value = 80, weight = 7 },
-	{ id = "red_snapper", displayName = "Red Snapper", modelName = "Red Snapper", value = 120, weight = 4 },
-	{ id = "tuna", displayName = "Tuna", modelName = "Tuna", value = 150, weight = 3 },
+	{ id = "saupe", displayName = "Saupe Fish", modelName = "Saupe Fish", value = 20, weight = 45, rarity = "Common" },
+	{ id = "blue_fish", displayName = "Blue Fish", modelName = "Blue Fish", value = 35, weight = 30, rarity = "Uncommon" },
+	{ id = "mullet", displayName = "Mullet", modelName = "Mullet", value = 55, weight = 18, rarity = "Uncommon" },
+	{ id = "cod", displayName = "Cod", modelName = "Cod", value = 80, weight = 7, rarity = "Rare" },
+	{ id = "red_snapper", displayName = "Red Snapper", modelName = "Red Snapper", value = 120, weight = 4, rarity = "Epic" },
+	{ id = "tuna", displayName = "Tuna", modelName = "Tuna", value = 150, weight = 3, rarity = "Legendary" },
 } :: { FishDef }
 
 FishingConfig.ZONE_FISH = {
