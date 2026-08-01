@@ -56,6 +56,18 @@ local function getRarityColor(rarity: string?): Color3
 	return RARITY_FALLBACK_COLOR
 end
 
+-- Rarity "tier scale" 0 (Common) .. 1 (Legendary), used to scale the catch reveal's drama
+-- (glow size/intensity, extra shockwave ring, how long it lingers on screen) so a Legendary
+-- catch visibly outshines a Common one instead of every rarity getting an identical popup.
+local RARITY_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+local function getRarityTierScale(rarity: string?): number
+	local index = rarity and table.find(RARITY_ORDER, rarity)
+	if not index then
+		return 0
+	end
+	return (index - 1) / (#RARITY_ORDER - 1)
+end
+
 -- Plays a one-shot clone of a Sounds/<name> template so overlapping plays don't cut each
 -- other off. Silently no-ops if the template is missing rather than erroring the whole file.
 local function playSound(name: string, volume: number?, pitch: number?)
@@ -86,6 +98,7 @@ local perfectZoneFrame: Frame? = nil
 local markerFrame: Frame? = nil
 local zoneLabel: TextLabel? = nil
 local fishNameLabel: TextLabel? = nil
+local rarityBadge: TextLabel? = nil
 local statusLabel: TextLabel? = nil
 local actionButton: TextButton? = nil
 local timerBarFrame: Frame? = nil
@@ -116,6 +129,7 @@ local activeSession: {
 	zoneMax: number,
 	resolved: boolean,
 	modelName: string?,
+	rarity: string?,
 	maxAttempts: number,
 	attemptsUsed: number,
 }? = nil
@@ -264,7 +278,7 @@ local function buildGui()
 	fishNameLabel = Instance.new("TextLabel")
 	fishNameLabel.Name = "FishName"
 	fishNameLabel.Position = UDim2.fromOffset(132, 20)
-	fishNameLabel.Size = UDim2.new(1, -132, 0, 30)
+	fishNameLabel.Size = UDim2.new(1, -132 - 88, 0, 30)
 	fishNameLabel.BackgroundTransparency = 1
 	fishNameLabel.Text = "Hooked Fish"
 	fishNameLabel.TextColor3 = COLORS.fishName
@@ -273,6 +287,21 @@ local function buildGui()
 	fishNameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	fishNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	fishNameLabel.Parent = minigameFrame
+
+	-- Rarity badge next to the fish name: telegraphs "this catch is harder" the instant the
+	-- minigame opens, before the player even looks at the zone width.
+	rarityBadge = Instance.new("TextLabel")
+	rarityBadge.Name = "RarityBadge"
+	rarityBadge.AnchorPoint = Vector2.new(1, 0)
+	rarityBadge.Position = UDim2.new(1, 0, 0, 24)
+	rarityBadge.Size = UDim2.fromOffset(80, 20)
+	rarityBadge.BackgroundColor3 = RARITY_FALLBACK_COLOR
+	rarityBadge.Text = "COMMON"
+	rarityBadge.TextColor3 = Color3.fromRGB(20, 20, 24)
+	rarityBadge.Font = Enum.Font.GothamBlack
+	rarityBadge.TextSize = 12
+	rarityBadge.Parent = minigameFrame
+	corner(rarityBadge, 10)
 
 	statusLabel = Instance.new("TextLabel")
 	statusLabel.Name = "Status"
@@ -539,6 +568,7 @@ local function beginMinigame(payload: any)
 		zoneMax = payload.zoneMax or 0.6,
 		resolved = false,
 		modelName = payload.modelName,
+		rarity = payload.rarity,
 		maxAttempts = payload.maxAttempts or FishingConfig.MINIGAME.MAX_ATTEMPTS,
 		attemptsUsed = 0,
 	}
@@ -549,6 +579,20 @@ local function beginMinigame(payload: any)
 	if fishNameLabel then
 		fishNameLabel.Text = payload.fishName or "Unknown Fish"
 		fishNameLabel.TextColor3 = COLORS.fishName
+	end
+	local rarityColor = getRarityColor(payload.rarity)
+	if rarityBadge then
+		rarityBadge.Text = string.upper(payload.rarity or "Common")
+		rarityBadge.BackgroundColor3 = rarityColor
+	end
+	-- Tint the catch zone (and its stroke) by rarity, on top of it simply being narrower —
+	-- color reinforces "this one's tougher" even before the player registers the width.
+	if catchZoneFrame then
+		catchZoneFrame.BackgroundColor3 = rarityColor
+		local zStroke = catchZoneFrame:FindFirstChildWhichIsA("UIStroke")
+		if zStroke then
+			zStroke.Color = rarityColor
+		end
 	end
 	if statusLabel then
 		statusLabel.TextColor3 = COLORS.subtext
@@ -613,6 +657,7 @@ local function buildCatchReveal(payload: any)
 
 	local rarityColor = getRarityColor(payload.rarity)
 	local perfect = payload.perfect == true
+	local tierScale = getRarityTierScale(payload.rarity) -- 0 (Common) .. 1 (Legendary)
 
 	local revealScreenGui = Instance.new("ScreenGui")
 	revealScreenGui.Name = "FishingCatchReveal"
@@ -664,16 +709,35 @@ local function buildCatchReveal(payload: any)
 	corner(rarityLabel, 12)
 
 	-- Glow ring behind the viewport: a soft rarity-colored halo that pulses once on arrival.
+	-- Bigger and more opaque for rarer fish, so a Legendary catch visibly outshines a Common one.
+	local glowSize = 200 + tierScale * 60
+	local glowPeakTransparency = 0.55 - tierScale * 0.2
 	local glow = Instance.new("Frame")
 	glow.Name = "Glow"
 	glow.AnchorPoint = Vector2.new(0.5, 0.5)
 	glow.Position = UDim2.new(0.5, 0, 0, 150)
-	glow.Size = UDim2.fromOffset(200, 200)
+	glow.Size = UDim2.fromOffset(glowSize, glowSize)
 	glow.BackgroundColor3 = rarityColor
 	glow.BackgroundTransparency = 1
 	glow.BorderSizePixel = 0
 	glow.Parent = card
 	corner(glow, 100)
+
+	-- Extra shockwave ring for Rare+ catches only: a thin expanding outline that pulses out
+	-- and fades, on top of the glow, for a bit more punch on the rarer half of the table.
+	local shockwave: Frame? = nil
+	if tierScale >= 0.5 then
+		shockwave = Instance.new("Frame")
+		shockwave.Name = "Shockwave"
+		shockwave.AnchorPoint = Vector2.new(0.5, 0.5)
+		shockwave.Position = UDim2.new(0.5, 0, 0, 150)
+		shockwave.Size = UDim2.fromOffset(190, 190)
+		shockwave.BackgroundTransparency = 1
+		shockwave.BorderSizePixel = 0
+		shockwave.Parent = card
+		corner(shockwave, 100)
+		stroke(shockwave, rarityColor, 4, 0.1)
+	end
 
 	local viewportHolder = Instance.new("Frame")
 	viewportHolder.Name = "ViewportHolder"
@@ -771,7 +835,7 @@ local function buildCatchReveal(payload: any)
 		playSound("Purchase", 0.5, 1.3)
 		TweenService:Create(viewportScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 		local glowTween = TweenService:Create(glow, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundTransparency = 0.55,
+			BackgroundTransparency = glowPeakTransparency,
 		})
 		glowTween:Play()
 		glowTween.Completed:Connect(function()
@@ -779,6 +843,23 @@ local function buildCatchReveal(payload: any)
 				BackgroundTransparency = 1,
 			}):Play()
 		end)
+
+		-- Shockwave: expands outward from the viewport ring and fades, once.
+		if shockwave then
+			shockwave.BackgroundTransparency = 1
+			local shockwaveStroke = shockwave:FindFirstChildWhichIsA("UIStroke")
+			if shockwaveStroke then
+				shockwaveStroke.Transparency = 0.1
+			end
+			TweenService:Create(shockwave, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(300, 300),
+			}):Play()
+			if shockwaveStroke then
+				TweenService:Create(shockwaveStroke, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Transparency = 1,
+				}):Play()
+			end
+		end
 	end)
 
 	task.delay(0.3, function()
@@ -852,7 +933,9 @@ local function buildCatchReveal(payload: any)
 		end
 	end)
 
-	local autoCloseDelay = if perfect then 4.5 else 3.5
+	-- Rarer (and Perfect) catches linger a little longer — there's more to look at (bigger
+	-- glow/shockwave) and it's a bigger deal, so rushing the dismiss undersells it.
+	local autoCloseDelay = (if perfect then 4.5 else 3.5) + tierScale * 1.5
 	task.delay(autoCloseDelay, requestClose)
 
 	local spin = 0

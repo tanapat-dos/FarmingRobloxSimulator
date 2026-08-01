@@ -51,10 +51,10 @@ FishingConfig.FISH_MODELS_FOLDER = "FishModels"
 FishingConfig.MINIGAME = {
 	CAST_COOLDOWN = 2.5,
 	SESSION_TIMEOUT = 6, -- seconds the player has to press before the fish escapes
-	SWEEP_PERIOD_SECONDS = 1.6, -- time for one full 0 -> 1 -> 0 sweep
+	SWEEP_PERIOD_SECONDS = 1.6, -- time for one full 0 -> 1 -> 0 sweep; fallback for unknown rarities
 	MAX_ATTEMPTS = 3, -- presses allowed per cast; miss all 3 and the fish escapes
-	-- Catch zone width is randomized per cast (fraction of the 0..1 bar) so it can't be
-	-- memorized; narrower zones are simply harder, not tied to fish rarity.
+	-- Catch zone width (fraction of the 0..1 bar); fallback for unknown rarities. Real casts
+	-- use RARITY_DIFFICULTY below instead — see getDifficultyForRarity.
 	ZONE_WIDTH_MIN = 0.16,
 	ZONE_WIDTH_MAX = 0.26,
 	-- Fraction of the zone's width, centered, that counts as a Perfect hit.
@@ -80,6 +80,31 @@ FishingConfig.MINIGAME = {
 	-- client can't spam the raycast + stand-registry scan that handler performs.
 	ZONE_REFRESH_MIN_INTERVAL = 0.5,
 }
+
+--[[
+	Rarity difficulty: the fish rolled at cast time now also decides how hard the timing
+	minigame is. A Legendary tuna is worth 7.5x a Common saupe fish, but until now every catch
+	used the exact same zone width and sweep speed — the reward ladder had no matching
+	difficulty ladder, so nothing about actually PLAYING the minigame reflected what you'd
+	hooked. Higher rarity = narrower zone (harder to land) + faster sweep (less time to react).
+
+	widthMul / speedMul scale the flat ZONE_WIDTH_MIN/MAX and SWEEP_PERIOD_SECONDS above:
+	  widthMul < 1  -> narrower zone (harder)
+	  speedMul < 1  -> shorter period -> faster sweep (harder)
+	Common stays at 1.0/1.0 (identical to the original flat tuning) so the baseline experience
+	is unchanged; only rarer fish ramp up.
+]]
+FishingConfig.RARITY_DIFFICULTY = {
+	Common = { widthMul = 1.0, speedMul = 1.0 },
+	Uncommon = { widthMul = 0.88, speedMul = 0.94 },
+	Rare = { widthMul = 0.76, speedMul = 0.88 },
+	Epic = { widthMul = 0.64, speedMul = 0.80 },
+	Legendary = { widthMul = 0.52, speedMul = 0.72 },
+}
+
+function FishingConfig.getDifficultyForRarity(rarity: string?): { widthMul: number, speedMul: number }
+	return (rarity and FishingConfig.RARITY_DIFFICULTY[rarity]) or FishingConfig.RARITY_DIFFICULTY.Common
+end
 
 FishingConfig.ZONES = {
 	{
@@ -212,12 +237,22 @@ function FishingConfig.getMarkerPosition(elapsedSeconds: number, periodSeconds: 
 end
 
 -- Rolls a random catch zone [min, max] within the 0..1 bar, sized between
--- ZONE_WIDTH_MIN and ZONE_WIDTH_MAX, fully inside the bar.
-function FishingConfig.rollCatchZone(): (number, number)
+-- ZONE_WIDTH_MIN and ZONE_WIDTH_MAX (scaled by `widthMul`, e.g. from a fish's rarity
+-- difficulty), fully inside the bar.
+function FishingConfig.rollCatchZone(widthMul: number?): (number, number)
 	local cfg = FishingConfig.MINIGAME
-	local width = math.random() * (cfg.ZONE_WIDTH_MAX - cfg.ZONE_WIDTH_MIN) + cfg.ZONE_WIDTH_MIN
+	local mul = widthMul or 1
+	local minWidth = cfg.ZONE_WIDTH_MIN * mul
+	local maxWidth = cfg.ZONE_WIDTH_MAX * mul
+	local width = math.random() * (maxWidth - minWidth) + minWidth
 	local center = math.random() * (1 - width) + width / 2
 	return math.clamp(center - width / 2, 0, 1), math.clamp(center + width / 2, 0, 1)
+end
+
+-- Effective sweep period for a fish, scaling the base SWEEP_PERIOD_SECONDS by `speedMul`
+-- (e.g. from a fish's rarity difficulty). A smaller period = a faster-moving marker.
+function FishingConfig.getSweepPeriod(speedMul: number?): number
+	return FishingConfig.MINIGAME.SWEEP_PERIOD_SECONDS * (speedMul or 1)
 end
 
 -- Returns (hit, perfect) for a press at `markerPosition` against zone [zoneMin, zoneMax].

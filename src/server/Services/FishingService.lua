@@ -86,20 +86,25 @@ local function clearSession(player: Player)
 	activeSessions[player] = nil
 end
 
-local function buildSession(zoneId: string, fishId: string): FishingSession
+local function buildSession(zoneId: string, fish: FishingConfig.FishDef): FishingSession
 	local cfg = FishingConfig.MINIGAME
 	-- Shared, client-synchronised clock (NOT os.clock) so the client renders the identical
 	-- sweep. See the latency note on FishingConfig.MINIGAME.
 	local now = FishingConfig.now()
-	local zoneMin, zoneMax = FishingConfig.rollCatchZone()
+
+	-- Difficulty scales with the fish's rarity: rarer fish get a narrower catch zone and a
+	-- faster sweep, so the minigame itself telegraphs "this one's worth more, and harder."
+	local difficulty = FishingConfig.getDifficultyForRarity(fish.rarity)
+	local zoneMin, zoneMax = FishingConfig.rollCatchZone(difficulty.widthMul)
+	local period = FishingConfig.getSweepPeriod(difficulty.speedMul)
 
 	return {
 		id = HttpService:GenerateGUID(false),
 		zoneId = zoneId,
-		fishId = fishId,
+		fishId = fish.id,
 		startedAt = now,
 		expiresAt = now + cfg.SESSION_TIMEOUT,
-		period = cfg.SWEEP_PERIOD_SECONDS,
+		period = period,
 		zoneMin = zoneMin,
 		zoneMax = zoneMax,
 		resolved = false,
@@ -203,7 +208,7 @@ local function startCast(player: Player)
 		return
 	end
 
-	local session = buildSession(zone.id, fish.id)
+	local session = buildSession(zone.id, fish)
 	activeSessions[player] = session
 	lastCastAt[player] = now
 
@@ -214,6 +219,7 @@ local function startCast(player: Player)
 		fishId = fish.id,
 		fishName = fish.displayName,
 		modelName = fish.modelName,
+		rarity = fish.rarity,
 		timeout = FishingConfig.MINIGAME.SESSION_TIMEOUT,
 		period = session.period,
 		zoneMin = session.zoneMin,
