@@ -40,6 +40,7 @@ local Service = {}
 
 local activeSessions: { [Player]: FishingSession } = {}
 local lastCastAt: { [Player]: number } = {}
+local lastZoneRefreshAt: { [Player]: number } = {}
 
 local function ensureRemote(name: string): RemoteEvent
 	local remote = remotes:FindFirstChild(name)
@@ -87,7 +88,9 @@ end
 
 local function buildSession(zoneId: string, fishId: string): FishingSession
 	local cfg = FishingConfig.MINIGAME
-	local now = os.clock()
+	-- Shared, client-synchronised clock (NOT os.clock) so the client renders the identical
+	-- sweep. See the latency note on FishingConfig.MINIGAME.
+	local now = FishingConfig.now()
 	local zoneMin, zoneMax = FishingConfig.rollCatchZone()
 
 	return {
@@ -185,7 +188,7 @@ local function startCast(player: Player)
 		return
 	end
 
-	local now = os.clock()
+	local now = FishingConfig.now()
 	local lastCast = lastCastAt[player] or 0
 	if now - lastCast < FishingConfig.MINIGAME.CAST_COOLDOWN then
 		notify(player, "Wait a moment before casting again.", "error")
@@ -214,6 +217,10 @@ local function startCast(player: Player)
 		zoneMin = session.zoneMin,
 		zoneMax = session.zoneMax,
 		maxAttempts = FishingConfig.MINIGAME.MAX_ATTEMPTS,
+		-- Absolute start time on the shared GetServerTimeNow clock. The client anchors its
+		-- sweep to THIS rather than to its own arrival time, so download latency can't offset
+		-- the two sweeps relative to each other.
+		startedAt = session.startedAt,
 	})
 end
 
@@ -235,7 +242,8 @@ local function registerPress(player: Player, sessionId: string)
 		return
 	end
 
-	local now = os.clock()
+	local cfg = FishingConfig.MINIGAME
+	local now = FishingConfig.now()
 	if now > session.expiresAt then
 		clearSession(player)
 		fishingRemote:FireClient(player, "result", { success = false, msg = "Too slow! The fish got away." })
@@ -251,13 +259,28 @@ local function registerPress(player: Player, sessionId: string)
 
 	session.attemptsUsed += 1
 
-	local elapsed = now - session.startedAt
+	--[[
+		Rewind by the press's upstream travel time so the marker is evaluated where the player
+		actually SAW it, not where it has since moved to. GetNetworkPing is measured by the
+		server (a client cannot inflate it), and the result is clamped so even a wild reading
+		can't rewind far enough to make a hit guaranteed.
+	]]
+	local pingCompensation = 0
+	local okPing, pingSeconds = pcall(function()
+		return player:GetNetworkPing()
+	end)
+	if okPing and typeof(pingSeconds) == "number" and pingSeconds > 0 then
+		pingCompensation = math.clamp(pingSeconds * cfg.PING_COMPENSATION_FACTOR, 0, cfg.PING_COMPENSATION_MAX)
+	end
+
+	-- Never rewind past the start of the cast.
+	local elapsed = math.max(0, (now - session.startedAt) - pingCompensation)
 	local markerPosition = FishingConfig.getMarkerPosition(elapsed, session.period)
 	local hit, perfect = FishingConfig.evaluatePress(
 		markerPosition,
 		session.zoneMin,
 		session.zoneMax,
-		FishingConfig.MINIGAME.PRESS_LATENCY_FORGIVENESS
+		cfg.PRESS_LATENCY_FORGIVENESS
 	)
 
 	if hit then
@@ -268,8 +291,7 @@ local function registerPress(player: Player, sessionId: string)
 	end
 
 	-- Missed — check remaining attempts
-	local maxAttempts = FishingConfig.MINIGAME.MAX_ATTEMPTS
-	local remaining = maxAttempts - session.attemptsUsed
+	local remaining = cfg.MAX_ATTEMPTS - session.attemptsUsed
 	if remaining <= 0 then
 		session.resolved = true
 		clearSession(player)
@@ -315,7 +337,27 @@ function Service.init()
 			if typeof(sessionId) == "string" then
 				cancelCast(player, sessionId)
 			end
+		elseif action == "timedOut" then
+			--[[
+				The client noticed the cast ran past its timeout and cleared its own UI. Retire
+				the server session immediately instead of leaving it alive until the next 0.25s
+				sweep of the expiry loop — otherwise the player can recast inside that gap and
+				get a confusing "Finish your current cast first."
+			]]
+			local sessionId = payload and payload.sessionId
+			local session = activeSessions[player]
+			if typeof(sessionId) == "string" and session and session.id == sessionId then
+				clearSession(player)
+			end
 		elseif action == "refreshZone" then
+			-- Throttled: this handler raycasts and scans the stand registry, so an unmodified
+			-- client's 1 Hz poll is fine but a spamming one must not be able to amplify it.
+			local now = FishingConfig.now()
+			local last = lastZoneRefreshAt[player] or 0
+			if now - last < FishingConfig.MINIGAME.ZONE_REFRESH_MIN_INTERVAL then
+				return
+			end
+			lastZoneRefreshAt[player] = now
 			pushZoneState(player)
 		end
 	end)
@@ -333,6 +375,7 @@ function Service.init()
 	Players.PlayerRemoving:Connect(function(player)
 		clearSession(player)
 		lastCastAt[player] = nil
+		lastZoneRefreshAt[player] = nil
 	end)
 
 	-- Sessions no longer stream per-frame progress (the marker sweep is fully deterministic
@@ -341,7 +384,7 @@ function Service.init()
 	task.spawn(function()
 		while true do
 			task.wait(0.25)
-			local now = os.clock()
+			local now = FishingConfig.now()
 			for player, session in activeSessions do
 				if now > session.expiresAt then
 					failSession(player, session, "The fish got away.")

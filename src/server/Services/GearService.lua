@@ -44,6 +44,7 @@ local function buyGear(player: Player, gearName: string)
 		return
 	end
 
+	-- config.price is the floor only; the crop-scaled remainder is charged on use.
 	if not moneyService.removeCash(player, config.price) then
 		notify(player, ("You need $%d for %s."):format(config.price, gearName), "error")
 		return
@@ -146,7 +147,9 @@ local function buildKiosk()
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundColor3 = Color3.fromRGB(25, 28, 36)
 		label.BackgroundTransparency = 0.3
-		label.Text = ("%s\n$%d"):format(gearName, config.price)
+		-- "from $X": config.price is only the floor charged here. The remainder is collected at
+		-- use time once the target crop is known (see EconomyBalance.GEAR / GearUseActivator).
+		label.Text = ("%s\nfrom $%d"):format(gearName, config.price)
 		label.TextColor3 = Color3.fromRGB(235, 240, 250)
 		label.Font = Enum.Font.GothamBold
 		label.TextScaled = true
@@ -157,7 +160,7 @@ local function buildKiosk()
 		corner.Parent = label
 
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = ("Buy — $%d"):format(config.price)
+		prompt.ActionText = ("Buy — from $%d"):format(config.price)
 		prompt.ObjectText = gearName
 		prompt.HoldDuration = 0.25
 		prompt.MaxActivationDistance = 10

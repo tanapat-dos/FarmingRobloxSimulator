@@ -56,15 +56,39 @@ local function nearestOwnPlant(player: Player): Model?
 end
 
 local function useFertilizer(player: Player, plant: Model): boolean
+	local moneyService = cachedModules.Cache.MoneyService
 	local serverConfig = plant:FindFirstChild("ServerConfiguration")
-	if not serverConfig then
+	if not serverConfig or not moneyService then
 		return false
 	end
 
-	local seedData = seedDataModule.getData(plantKeyUtil.getSeedName(plant.Name))
+	local seedName = plantKeyUtil.getSeedName(plant.Name)
+	local seedData = seedDataModule.getData(seedName)
 	local growth = serverConfig:FindFirstChild("GrowthPercentage")
 
+	--[[
+		Deferred dynamic charge: the kiosk only collected the floor price, because what a
+		Fertilizer is worth depends entirely on the crop it skips (a flat price made it useless
+		on a 55s Carrot and a ~5x money printer on a 20-minute Mythical). Collect the remainder
+		now that the target is known. Checked BEFORE any mutation of crop state so a player who
+		cannot afford it keeps both their cash and their charge.
+	]]
+	local seedPrice = seedData and seedData:FindFirstChild("Price") and seedData.Price.Value or 0
+	local extraCost = EconomyBalance.getFertilizerExtraCost(seedName, seedPrice)
+	if extraCost > 0 and not moneyService.hasEnoughCash(player, extraCost) then
+		notify(player, ("Fertilising %s costs an extra $%d — you don't have enough cash."):format(
+			plantKeyUtil.resolveCropName(plant.Name), extraCost), "error")
+		return false
+	end
+
+	local function chargeExtra()
+		if extraCost > 0 then
+			moneyService.removeCash(player, extraCost)
+		end
+	end
+
 	if growth and growth.Value < 100 then
+		chargeExtra()
 		growth.Value = 100
 		notify(player, "🌱 Fertilizer used — crop fully grown!", "success")
 		return true
@@ -83,6 +107,7 @@ local function useFertilizer(player: Player, plant: Model): boolean
 			end
 		end
 		if ripened then
+			chargeExtra()
 			notify(player, "🌱 Fertilizer used — fruits ripened!", "success")
 			return true
 		end

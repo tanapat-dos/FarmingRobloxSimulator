@@ -98,33 +98,98 @@ EconomyBalance.REBIRTH = {
 	boostPerRebirth = 0.25, -- +25% permanent sell value per rebirth
 }
 
--- Procedural gear (no .rbxl assets: tools are built in code like pet tools).
--- Mutation Spray uses deferred/dynamic pricing (see getMutationSprayExtraCost below):
--- the kiosk price below is charged upfront (covers the formula's $3500 floor for any crop),
--- and an additional charge is collected at USE time if the target crop's seed price pushes
--- the dynamic formula above that floor. This avoids a free-to-hold, pay-later exploit while
--- still letting the final price scale with the target crop.
+--[[
+	Procedural gear (no .rbxl assets: tools are built in code like pet tools).
+
+	BOTH gear items are priced dynamically against the crop they are used on, because the VALUE
+	of each scales with crop tier while a flat price does not. A flat price is broken at both
+	ends: worthless on a 55-second Carrot, and a money printer on a 20-minute Mythical.
+
+	Deferred charge: the kiosk collects only the floor price below (so nothing is ever free to
+	hold), and the REMAINDER is charged at use time once the target crop is known. The floor is
+	deliberately the same number as the formula's minimum, so a cheap target costs exactly the
+	kiosk price and never overcharges.
+]]
 EconomyBalance.GEAR = {
 	["Fertilizer"] = {
-		price = 750,
+		price = 150, -- floor; the rest is charged on use, scaled to the target crop
 		color = Color3.fromRGB(133, 97, 61),
-		description = "Instantly finishes growing your nearest crop.",
+		description = "Instantly finishes growing your nearest crop. Higher-tier crops cost "
+			.. "more to fertilise (charged when used).",
 	},
 	["Mutation Spray"] = {
-		price = 3500,
+		price = 100, -- floor; the rest is charged on use, scaled to the target crop
 		color = Color3.fromRGB(120, 220, 255),
-		description = "Sprays your nearest crop: guaranteed Golden. Pricier crops cost extra "
-			.. "to spray (charged when used). Cannot target Mango or Crystal Blooms.",
+		description = "Sprays your nearest crop: guaranteed Golden. Higher-tier crops cost "
+			.. "more to spray (charged when used). Cannot target Mango or Crystal Blooms.",
 	},
 }
 
--- Dynamic Mutation Spray pricing: price = max(3500, ceil(targetSeedPrice * 2.75)).
--- The kiosk already collects GEAR["Mutation Spray"].price ($3500) upfront; this returns only
--- the ADDITIONAL amount to collect at use-time (0 for any crop priced <= ~1273, since 3500 is
--- already the formula's floor).
+--[[
+	Fertilizer converts the crop's remaining grow time into an instant harvest, so what it
+	really buys is ONE cycle's profit brought forward. At the TARGET_EXPECTED_SALE_ROI of 1.60x,
+	one cycle's profit is 0.60 x seedPrice, and we charge 60% of that — leaving the player a
+	real but modest gain rather than the ~5x return a flat $750 gave on Mythical crops.
+
+	  price = max(FERTILIZER_PRICE_FLOOR, ceil(seedPrice * 0.36))       (0.60 profit x 0.60)
+
+	Mango and Crystal Blooms need explicit values because seedPrice does not represent a cycle
+	cost for them: Mango's $60K is a one-time tree purchase (its fertilise ripens up to 4 fruits
+	worth ~$333 each => ~$1,332, charged at 60% = $800), and Crystal Blooms is bought with Fish
+	Coins so its cash price is 0 while a cycle yields ~$12,993 of pure profit (60% = $7,800).
+]]
+EconomyBalance.FERTILIZER_PRICE_FLOOR = 150
+EconomyBalance.FERTILIZER_PRICE_RATIO = 0.36
+EconomyBalance.FERTILIZER_PRICE_OVERRIDES = {
+	["Mango Seed"] = 800,
+	["Crystal Blooms Seed"] = 7800,
+}
+
+--[[
+	Mutation Spray upgrades one fruit from no-mutation (x1) to Golden (x3), so it adds 2x that
+	fruit's un-mutated expected value. Working that through the same ROI identity:
+
+	  addedValue = 2 x (expectedRevenue / E[mutation]) = 2 x (1.60 x price / 1.169)
+	             ~= 2.74 x seedPrice
+
+	The previous formula charged `2.75 x seedPrice`, i.e. EXACTLY the added value — so the spray
+	was break-even at best and a loss once the $3,500 floor kicked in, meaning no crop made it
+	worth buying. Charging 65% of the added value instead leaves a genuine upside.
+
+	  price = max(MUTATION_SPRAY_PRICE_FLOOR, ceil(seedPrice * 1.78))   (2.74 x 0.65)
+]]
+EconomyBalance.MUTATION_SPRAY_PRICE_FLOOR = 100
+EconomyBalance.MUTATION_SPRAY_PRICE_RATIO = 1.78
+
+-- Full dynamic price to fertilise the given crop (kiosk floor already paid; see *ExtraCost).
+function EconomyBalance.getFertilizerPrice(seedName: string, targetSeedPrice: number): number
+	local override = EconomyBalance.FERTILIZER_PRICE_OVERRIDES[seedName]
+	if override then
+		return override
+	end
+	return math.max(
+		EconomyBalance.FERTILIZER_PRICE_FLOOR,
+		math.ceil((targetSeedPrice or 0) * EconomyBalance.FERTILIZER_PRICE_RATIO)
+	)
+end
+
+-- Full dynamic price to spray the given crop (kiosk floor already paid; see *ExtraCost).
+function EconomyBalance.getMutationSprayPrice(targetSeedPrice: number): number
+	return math.max(
+		EconomyBalance.MUTATION_SPRAY_PRICE_FLOOR,
+		math.ceil((targetSeedPrice or 0) * EconomyBalance.MUTATION_SPRAY_PRICE_RATIO)
+	)
+end
+
+-- Additional cash to collect at USE time, over what the kiosk already charged.
+function EconomyBalance.getFertilizerExtraCost(seedName: string, targetSeedPrice: number): number
+	local full = EconomyBalance.getFertilizerPrice(seedName, targetSeedPrice)
+	return math.max(0, full - EconomyBalance.GEAR["Fertilizer"].price)
+end
+
 function EconomyBalance.getMutationSprayExtraCost(targetSeedPrice: number): number
-	local dynamicPrice = math.max(3500, math.ceil((targetSeedPrice or 0) * 2.75))
-	return math.max(0, dynamicPrice - EconomyBalance.GEAR["Mutation Spray"].price)
+	local full = EconomyBalance.getMutationSprayPrice(targetSeedPrice)
+	return math.max(0, full - EconomyBalance.GEAR["Mutation Spray"].price)
 end
 
 EconomyBalance.EGG_ORDER = {
@@ -248,32 +313,41 @@ EconomyBalance.EXPECTED_STANDARD_SIZE_MULTIPLIER = 2.171 -- E[weight^1.5], stand
 EconomyBalance.EXPECTED_PERENNIAL_SIZE_MULTIPLIER = 1.181 -- E[weight^1.5], Mango's reduced roll
 EconomyBalance.EXPECTED_GROWTH_MUTATION_MULTIPLIER = 1.169 -- E[mutation]: 1%x8 + 4.95%x3 + rest x1
 
+--[[
+	NOTE ON TIERS: `rarity` no longer gates access. CropTierConfig deliberately has EMPTY gate
+	lists for every tier — progression is throttled purely by seed price and shop-stock RNG
+	(ShopStock.APPEAR_CHANCE_BY_RARITY / SEED_STOCK_RANGE), so any player who can afford a
+	Mythical seed may buy it when one appears. `rarity` therefore only drives shop stock odds
+	and the harvest-quality bias in HarvestRarityConfig.CROP_BIAS. Earlier revisions of this
+	table documented earned-cash / plot-count unlock thresholds here; those gates are gone and
+	the comments were removed so they cannot mislead.
+]]
 EconomyBalance.CROPS = {
-	-- Common — no unlock gate
+	-- Common
 	["Carrot Seed"] = { price = 25, baseValue = 14.6, growthTime = 55, rarity = "Common" },
 	["Wheat Seed"] = { price = 35, baseValue = 20.4, growthTime = 75, rarity = "Common" },
 
-	-- Uncommon — no unlock gate
+	-- Uncommon
 	["Lettuce Seed"] = { price = 90, baseValue = 48.7, growthTime = 105, rarity = "Uncommon" },
 	["Potato Seed"] = { price = 100, baseValue = 54.2, growthTime = 115, rarity = "Uncommon" },
 	["Beetroot Seed"] = { price = 110, baseValue = 59.6, growthTime = 130, rarity = "Uncommon" },
 
-	-- Rare — $25K earned
+	-- Rare
 	["Tomato Seed"] = { price = 270, baseValue = 131.3, growthTime = 190, rarity = "Rare" },
 	["Garlic Seed"] = { price = 290, baseValue = 141.0, growthTime = 205, rarity = "Rare" },
 	["Corn Seed"] = { price = 315, baseValue = 153.2, growthTime = 220, rarity = "Rare" },
 
-	-- Epic — $250K earned + 3 plots
+	-- Epic
 	["Strawberry Seed"] = { price = 750, baseValue = 332.5, growthTime = 335, rarity = "Epic" },
 	["Pepper Seed"] = { price = 840, baseValue = 372.4, growthTime = 370, rarity = "Epic" },
 	["Pumpkin Seed"] = { price = 920, baseValue = 407.9, growthTime = 405, rarity = "Epic" },
 
-	-- Legendary — $2M earned + 500 fruits harvested
+	-- Legendary
 	["Grape Seed"] = { price = 2350, baseValue = 911.7, growthTime = 615, rarity = "Legendary" },
 	["Eggplant Seed"] = { price = 2500, baseValue = 969.9, growthTime = 660, rarity = "Legendary" },
 	["Pineapple Seed"] = { price = 2670, baseValue = 1035.9, growthTime = 705, rarity = "Legendary" },
 
-	-- Mythical — $15M earned + 10 mutations found
+	-- Mythical
 	["Candy Vine Seed"] = { price = 5650, baseValue = 1992.7, growthTime = 1115, rarity = "Mythical" },
 	["Red Mushroom Seed"] = { price = 6000, baseValue = 2116.2, growthTime = 1180, rarity = "Mythical" },
 	["Bubble Rash Seed"] = { price = 6350, baseValue = 2239.6, growthTime = 1245, rarity = "Mythical" },

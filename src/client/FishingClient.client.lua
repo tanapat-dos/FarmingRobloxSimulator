@@ -381,7 +381,7 @@ local function renderMinigame()
 		perfectZoneFrame.Size = UDim2.new(FishingConfig.MINIGAME.PERFECT_ZONE_FRACTION, 0, 1, -6)
 	end
 
-	local elapsed = os.clock() - activeSession.startedAt
+	local elapsed = FishingConfig.now() - activeSession.startedAt
 	local markerPosition = FishingConfig.getMarkerPosition(elapsed, activeSession.period)
 	if markerFrame then
 		markerFrame.Position = UDim2.new(markerPosition, 0, 0.5, 0)
@@ -395,7 +395,11 @@ end
 local function beginMinigame(payload: any)
 	activeSession = {
 		sessionId = payload.sessionId,
-		startedAt = os.clock(),
+		-- Anchor to the server's absolute start time on the shared GetServerTimeNow clock, NOT
+		-- to our arrival time — otherwise download latency offsets our sweep from the
+		-- server's and visually-correct presses get scored as misses. Falls back to "now" only
+		-- if an old server build omits the field.
+		startedAt = payload.startedAt or FishingConfig.now(),
 		timeout = payload.timeout or FishingConfig.MINIGAME.SESSION_TIMEOUT,
 		period = payload.period or FishingConfig.MINIGAME.SWEEP_PERIOD_SECONDS,
 		zoneMin = payload.zoneMin or 0.4,
@@ -503,9 +507,14 @@ RunService.RenderStepped:Connect(function(dt)
 			previewModel:PivotTo(CFrame.new(pivot.Position) * CFrame.Angles(0, previewSpin, 0))
 		end
 
-		local elapsed = os.clock() - activeSession.startedAt
+		local elapsed = FishingConfig.now() - activeSession.startedAt
 		if elapsed >= activeSession.timeout then
+			-- Tell the server so it retires the session now rather than up to 0.25s later on
+			-- its expiry sweep; otherwise recasting in that window is rejected as "Finish your
+			-- current cast first."
+			local sessionId = activeSession.sessionId
 			endMinigame()
+			fishingRemote:FireServer("timedOut", { sessionId = sessionId })
 		end
 	end
 

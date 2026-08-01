@@ -26,15 +26,26 @@ FishingConfig.FISH_MODELS_FOLDER = "FishModels"
 
 --[[
 	Swing-timing minigame (Pangya-style): a marker sweeps back and forth across a 0..1 bar.
-	The player gets ONE press per cast — press while the marker overlaps the catch zone to
-	land the fish (dead-center of the zone = Perfect, better payout); press outside the zone,
-	or never press before the timeout, and the fish gets away.
+	The player gets up to MAX_ATTEMPTS presses per cast — press while the marker overlaps the
+	catch zone to land the fish (dead-center of the zone = Perfect, better payout); miss every
+	attempt, or never press before the timeout, and the fish gets away.
 
-	The marker's position is a deterministic function of elapsed time (see getMarkerPosition),
-	so the server never needs to stream per-frame position updates — it sends the cast's
-	startedAt/period/zone bounds once, and the client renders the same sweep locally. The
-	server independently recomputes the marker position from its own clock when validating the
-	press, so timing cannot be spoofed from the client.
+	TIMING / LATENCY (this was a real bug — do not "simplify" it back):
+	The sweep is driven by `workspace:GetServerTimeNow()`, which is the SAME synchronised clock
+	on the server and on every client. The server sends the cast's absolute `startedAt` in that
+	clock domain, so both sides place the marker at an identical position at any real instant.
+
+	The first version instead called `os.clock()` independently on each side and set the
+	client's `startedAt` when the "startMinigame" message ARRIVED. That made the client's sweep
+	lag the server's by the full round-trip time, so the server scored presses against a marker
+	position the player never saw. The marker crosses the bar in SWEEP_PERIOD_SECONDS/2 seconds,
+	so at 100 ms RTT the two sides disagreed by ~12.5% of the bar — wider than the Perfect
+	window, which made Perfect unreachable and turned visually-centered hits into misses for
+	anyone without a LAN-grade connection.
+
+	The shared clock removes the download half of that error. What remains is only the UPSTREAM
+	travel time of the press, which the server subtracts via Player:GetNetworkPing() (see
+	PING_COMPENSATION_FACTOR); PRESS_LATENCY_FORGIVENESS absorbs the leftover jitter.
 ]]
 FishingConfig.MINIGAME = {
 	CAST_COOLDOWN = 2.5,
@@ -48,14 +59,25 @@ FishingConfig.MINIGAME = {
 	-- Fraction of the zone's width, centered, that counts as a Perfect hit.
 	PERFECT_ZONE_FRACTION = 0.4,
 	PERFECT_PAYOUT_MULTIPLIER = 1.35,
-	-- Server-side slack added to the zone bounds when validating a press, to absorb network
-	-- latency between the client seeing "marker is in the zone" and the server processing it.
+	--[[
+		Player:GetNetworkPing() reports roughly ONE-WAY latency, and a press only travels one
+		way (client -> server), so the default factor is 1. If playtesting shows hits still
+		registering late, raise toward 2 (i.e. treat the reading as round-trip); if they
+		register early, lower it. Compensation is clamped by PING_COMPENSATION_MAX so an absurd
+		ping reading can never rewind the marker far enough to guarantee a hit.
+	]]
+	PING_COMPENSATION_FACTOR = 1,
+	PING_COMPENSATION_MAX = 0.35,
+	-- Slack added to the zone bounds when validating a press, absorbing the residual ping
+	-- jitter that the compensation above cannot perfectly cancel.
 	PRESS_LATENCY_FORGIVENESS = 0.05,
-	MAX_DISTANCE_FROM_ZONE = 18,
 	-- Tight bounds: must stand on bridge / fishing rocks (see STAND_TAG).
 	STAND_MARGIN = 3,
 	STAND_VERTICAL_REACH = 14,
 	FLOOR_RAYCAST_DEPTH = 22,
+	-- Per-player throttle for the client's periodic "refreshZone" request, so a modified
+	-- client can't spam the raycast + stand-registry scan that handler performs.
+	ZONE_REFRESH_MIN_INTERVAL = 0.5,
 }
 
 FishingConfig.ZONES = {
@@ -103,18 +125,6 @@ function FishingConfig.getZoneById(zoneId: string): FishingZoneDef?
 		end
 	end
 	return nil
-end
-
-function FishingConfig.isPointInZone(point: Vector3, zone: FishingZoneDef): boolean
-	local half = zone.size * 0.5
-	local delta = point - zone.center
-	return math.abs(delta.X) <= half.X
-		and math.abs(delta.Y) <= half.Y
-		and math.abs(delta.Z) <= half.Z
-end
-
-function FishingConfig.isPlayerNearZone(point: Vector3, zone: FishingZoneDef): boolean
-	return FishingConfig.isPointInZone(point, zone)
 end
 
 function FishingConfig.isPlayerOnStandPart(point: Vector3, part: BasePart): boolean
@@ -172,6 +182,16 @@ function FishingConfig.resolveZoneAtPosition(position: Vector3, standParts: { In
 	end
 
 	return bestZone
+end
+
+--[[
+	The clock the sweep is measured against. GetServerTimeNow() is synchronised between the
+	server and every client, so both sides derive the same marker position for the same real
+	instant. Both the client renderer and the server's press validation MUST use this — see the
+	latency note on MINIGAME above for why using per-side clocks broke the minigame.
+]]
+function FishingConfig.now(): number
+	return workspace:GetServerTimeNow()
 end
 
 -- Deterministic 0 -> 1 -> 0 -> ... triangle wave, so client and server compute the exact
