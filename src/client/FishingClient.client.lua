@@ -811,9 +811,11 @@ local function buildCatchReveal(payload: any)
 				conn:Disconnect()
 				return
 			end
-			rewardLabel.Text = if finalCoins > 0
-				then `+$%d  •  +🐟%d`:format(shownReward, shownCoins)
-				else `+$%d`:format(shownReward)
+			if finalCoins > 0 then
+				rewardLabel.Text = ("+$%d  •  +🐟%d"):format(shownReward, shownCoins)
+			else
+				rewardLabel.Text = ("+$%d"):format(shownReward)
+			end
 			if alpha >= 1 then
 				conn:Disconnect()
 			end
