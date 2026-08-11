@@ -93,6 +93,20 @@ function Service.giveFruit(target:Player, fruitName: string, fruitAttributes: an
 			end
 		end
 
+		-- Collection log: first-ever harvest of this crop, and first-ever sighting of any
+		-- mutation carried on it (Golden/Rainbow from growth rolls, Wet/Shocked from weather).
+		local collectionService = cachedModules.Cache.CollectionService
+		if collectionService then
+			if collectionService.discoverCrop then
+				collectionService.discoverCrop(target, fruitName)
+			end
+			if collectionService.discoverMutation and typeof(mutations) == "string" and mutations ~= "" then
+				for mutationName in mutations:gmatch("[^,]+") do
+					collectionService.discoverMutation(target, mutationName)
+				end
+			end
+		end
+
 	end
 end
 

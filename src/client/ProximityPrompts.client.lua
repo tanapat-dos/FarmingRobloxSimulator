@@ -22,6 +22,16 @@ local function fireCropPriceBoardOpen()
 	end
 end
 
+local function fireRebirthLeaderboardOpen()
+	local cs = ReplicatedStorage:FindFirstChild("ClientSignals")
+	if cs then
+		-- BindableEvent takes no args (see RebirthLeaderboardClient.client.lua's toggle()),
+		-- unlike ToggleCropPriceBoard which expects an "open"/"close" action string.
+		local toggle = cs:FindFirstChild("ToggleRebirthLeaderboard")
+		if toggle then toggle:Fire() end
+	end
+end
+
 --// Assets
 local DialogueTemplate = ReplicatedStorage:WaitForChild("DialogueGUI")
 local SellDisplay = ReplicatedStorage:WaitForChild("SellGUI")
@@ -435,6 +445,11 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 		task.delay(0.5, function()
 			toggleAllPrompts(true)
 		end)
+	elseif prompt.Name == "RebirthPriceBoard" then
+		fireRebirthLeaderboardOpen()
+		task.delay(0.5, function()
+			toggleAllPrompts(true)
+		end)
 	end
 	
 	if prompt.Name == "HarvestPrompt" then
@@ -453,7 +468,7 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 	-- Re-enable after a short beat so their own panel/remote fires first.
 	local handledNames = {
 		OpenShop = true, SellShop = true, OpenPetShop = true,
-		CropPriceBoard = true, HarvestPrompt = true, BuyPrompt = true,
+		CropPriceBoard = true, RebirthPriceBoard = true, HarvestPrompt = true, BuyPrompt = true,
 	}
 	if not handledNames[prompt.Name] then
 		task.delay(0.2, function()

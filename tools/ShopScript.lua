@@ -48,6 +48,23 @@ local LOCKED_COLORS = {
 	progress = Color3.fromRGB(120, 128, 145),
 }
 
+-- Grow time shown on each seed card, e.g. 55 -> "🌱 55s", 705 -> "🌱 11m 45s".
+local function formatGrowTime(seconds: number): string
+	seconds = math.max(0, math.floor(seconds or 0))
+	if seconds <= 0 then
+		return ""
+	end
+	if seconds < 60 then
+		return ("🌱 %ds"):format(seconds)
+	end
+	local minutes = math.floor(seconds / 60)
+	local remSeconds = seconds % 60
+	if remSeconds == 0 then
+		return ("🌱 %dm"):format(minutes)
+	end
+	return ("🌱 %dm %ds"):format(minutes, remSeconds)
+end
+
 -- Compact number, e.g. 15000000 -> "15M", 340000 -> "340K"
 local function abbreviateAmount(n: number): string
 	if n >= 1e9 then
@@ -337,10 +354,15 @@ local function buildSeedCards()
 		local name = dataFolder:FindFirstChild("Name") and dataFolder.Name.Value or cropName
 		local price = dataFolder:FindFirstChild("Price") and dataFolder.Price.Value or 0
 		local rarity = dataFolder:FindFirstChild("Rarity") and dataFolder.Rarity.Value or "Common"
+		local growthTime = dataFolder:FindFirstChild("GrowthTime") and dataFolder.GrowthTime.Value or 0
 
 		cropClone.SeedName.Text = name
 		cropClone.SeedPrice.Text = "$" .. tostring(price)
 		cropClone.Rarity.TextLabel.Text = rarity
+		local growTimeLabel = cropClone:FindFirstChild("GrowTime")
+		if growTimeLabel then
+			growTimeLabel.Text = formatGrowTime(growthTime)
+		end
 
 		CollectionService:AddTag(cropClone, "Hover")
 		applyRarityBadge(cropClone.Rarity, rarity)
@@ -468,6 +490,10 @@ RemoteEvents.ResetSeedShop.OnClientEvent:Connect(function(cropData, lockedTiers)
 			cropFrame.SeedPrice.Text = "$" .. tostring(data.Price)
 			cropFrame.SeedStock.Text = data.StockAmount <= 0 and "OUT OF STOCK" or "X" .. tostring(data.StockAmount) .. " Stock"
 			cropFrame.Rarity.TextLabel.Text = data.Rarity
+			local growTimeLabel = cropFrame:FindFirstChild("GrowTime")
+			if growTimeLabel then
+				growTimeLabel.Text = formatGrowTime(data.GrowthTime)
+			end
 			CollectionService:AddTag(cropFrame, "Hover")
 			applyRarityBadge(cropFrame.Rarity, data.Rarity)
 			cropFrame:SetAttribute("Price", data.Price)

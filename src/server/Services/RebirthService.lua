@@ -1,10 +1,11 @@
 --[[
 	RebirthService — permanent progression reset loop.
 
-	Rebirthing costs cash (escalating per rebirth) and resets cash, seeds,
-	fruits, crops, and plots — in exchange for a permanent sell-value
-	multiplier (EconomyBalance.REBIRTH.boostPerRebirth per rebirth).
-	Pets and order history are kept.
+	Rebirthing costs cash (escalating per rebirth) and resets cash, seeds, and fruits — in
+	exchange for a permanent sell-value multiplier (linear boostPerRebirth + one-time
+	milestone bonuses at rebirth 5/10/25, see EconomyBalance.REBIRTH_MILESTONES) plus a
+	cosmetic aura tier visible to other players (EconomyBalance.REBIRTH_AURA_TIERS).
+	Plots, pets, and order history are all kept — only currency/inventory reset.
 
 	The altar is procedural (stone pedestal + crystal beside the sell shop;
 	reposition by adding a Part named "RebirthAltarAnchor"). Confirmation is
@@ -51,10 +52,15 @@ local function clearPlayerTools(player: Player)
 	end
 end
 
+local function totalRebirthBoostPct(rebirths: number): number
+	local linear = rebirths * REBIRTH.boostPerRebirth
+	local milestone = EconomyBalance.getRebirthMilestoneBonus(rebirths)
+	return math.floor((linear + milestone) * 100)
+end
+
 local function performRebirth(player: Player)
 	local dataService = cachedModules.Cache.DataService
 	local moneyService = cachedModules.Cache.MoneyService
-	local plotService = cachedModules.Cache.PlotService
 
 	local data = dataService.getData(player)
 	if not data then
@@ -67,20 +73,19 @@ local function performRebirth(player: Player)
 		return
 	end
 
-	-- Wipe the run
-	for _, plant in workspace.World.Map.PlantedSeeds.Server:GetChildren() do
-		if plant:GetAttribute("Owner") == player.UserId then
-			plant:Destroy()
-		end
-	end
-	data.PlotData = {}
+	-- Reset the run's currency/items only. PLOTS ARE KEPT — data.PlotData (currently growing
+	-- crops) and data.PlotsOwned (unlocked beds) are deliberately left untouched, unlike the
+	-- original version of this system. Losing all bed progress on every rebirth punished the
+	-- exact high-earning players this system is meant to reward, turning the reset into a
+	-- penalty instead of a genuine choice.
 	data.Inventory = {}
-	data.PlotsOwned = EconomyBalance.PLOTS.startOwned
 	data.Cash = EconomyBalance.STARTING_CASH
 	clearPlayerTools(player)
 
+	local previousRebirths = data.Rebirths or 0
+
 	-- Permanent gain
-	data.Rebirths = (data.Rebirths or 0) + 1
+	data.Rebirths = previousRebirths + 1
 	player:SetAttribute("Rebirths", data.Rebirths)
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if leaderstats and leaderstats:FindFirstChild("Rebirths") then
@@ -88,19 +93,114 @@ local function performRebirth(player: Player)
 	end
 	moneyService.updateCashCount(player)
 
-	local plot = plotService.getPlot(player)
-	if plot then
-		plotService.setupBeds(player, plot)
+	local rebirthLeaderboardService = cachedModules.Cache.RebirthLeaderboardService
+	if rebirthLeaderboardService and rebirthLeaderboardService.reportRebirths then
+		rebirthLeaderboardService.reportRebirths(player.UserId, player.Name, data.Rebirths)
 	end
 
-	local totalBoost = math.floor(data.Rebirths * REBIRTH.boostPerRebirth * 100)
-	notify(player, ("🌟 Rebirth %d! You now earn +%d%% on every sale, forever."):format(
-		data.Rebirths, totalBoost), "success")
+	Service.refreshAura(player)
+
+	local totalBoostPct = totalRebirthBoostPct(data.Rebirths)
+	local hitNewMilestone = false
+	for _, milestone in EconomyBalance.REBIRTH_MILESTONES do
+		if milestone.atRebirth == data.Rebirths then
+			hitNewMilestone = true
+		end
+	end
+
+	if hitNewMilestone then
+		notify(player, ("🌟 Rebirth %d! MILESTONE REACHED — you now earn +%d%% on every sale, forever."):format(
+			data.Rebirths, totalBoostPct), "success")
+	else
+		notify(player, ("🌟 Rebirth %d! You now earn +%d%% on every sale, forever."):format(
+			data.Rebirths, totalBoostPct), "success")
+	end
 
 	-- Track rebirth achievement stat
 	local achieveService = cachedModules.Cache.AchievementService
 	if achieveService and achieveService.syncRebirths then
 		achieveService.syncRebirths(player)
+	end
+end
+
+--[[
+	Cosmetic aura rig — a colored particle ring anchored to the character's HumanoidRootPart,
+	visible to EVERY player (server-owned Attachment on a replicated character part, not a
+	client-local effect), so a heavily-rebirthed player visibly stands out to others. Purely
+	decorative: never touches PetBoost/FriendBoost/Cash or any other gameplay attribute.
+]]
+local AURA_ATTACHMENT_NAME = "RebirthAuraEffect"
+
+local function buildAuraAttachment(color: Color3): Attachment
+	local attachment = Instance.new("Attachment")
+	attachment.Name = AURA_ATTACHMENT_NAME
+
+	local ring = Instance.new("ParticleEmitter")
+	ring.Name = "Ring"
+	ring.Color = ColorSequence.new(color)
+	ring.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.4),
+		NumberSequenceKeypoint.new(0.5, 0.9),
+		NumberSequenceKeypoint.new(1, 0.1),
+	})
+	ring.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.4),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	ring.Lifetime = NumberRange.new(1.1, 1.6)
+	ring.Speed = NumberRange.new(0.5, 1)
+	ring.SpreadAngle = Vector2.new(180, 180)
+	ring.Rate = 14
+	ring.LightEmission = 0.9
+	ring.Parent = attachment
+
+	local light = Instance.new("PointLight")
+	light.Name = "AuraLight"
+	light.Color = color
+	light.Brightness = 0.8
+	light.Range = 8
+	light.Parent = attachment
+
+	return attachment
+end
+
+local function applyAuraToCharacter(character: Model, rebirths: number)
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+
+	local existing = root:FindFirstChild(AURA_ATTACHMENT_NAME)
+	if existing then
+		existing:Destroy()
+	end
+
+	local tier = EconomyBalance.getRebirthAuraTier(rebirths)
+	if not tier then
+		return -- rebirth 0: no aura, nothing to attach
+	end
+
+	buildAuraAttachment(tier.color).Parent = root
+end
+
+-- Re-applies the aura for the player's CURRENT character right now, and wires it to
+-- re-apply automatically on every future respawn (auras don't persist across CharacterAdded
+-- since the whole character, including HumanoidRootPart, is replaced on respawn).
+function Service.refreshAura(player: Player)
+	local dataService = cachedModules.Cache.DataService
+	local data = dataService.getData(player)
+	local rebirths = (data and data.Rebirths) or 0
+
+	if player.Character then
+		applyAuraToCharacter(player.Character, rebirths)
+	end
+
+	if not player:GetAttribute("RebirthAuraHooked") then
+		player:SetAttribute("RebirthAuraHooked", true)
+		player.CharacterAdded:Connect(function(character)
+			local currentData = dataService.getData(player)
+			applyAuraToCharacter(character, (currentData and currentData.Rebirths) or 0)
+		end)
 	end
 end
 
@@ -129,10 +229,28 @@ local function onAltarTriggered(player: Player)
 
 	pendingConfirm[player] = now
 	local cost = Service.getRebirthCost(data.Rebirths or 0)
-	local nextBoost = math.floor((data.Rebirths + 1) * REBIRTH.boostPerRebirth * 100)
-	notify(player, ("Rebirth costs <b>$%d</b>: resets cash, seeds, fruits, crops and plots "
-		.. "(pets are kept) for a permanent <b>+%d%%</b> sell boost. "
-		.. "Use the altar again within %d seconds to confirm!"):format(cost, nextBoost, CONFIRM_WINDOW),
+	local nextRebirths = (data.Rebirths or 0) + 1
+	local nextBoostPct = totalRebirthBoostPct(nextRebirths)
+
+	local extraNote = ""
+	for _, milestone in EconomyBalance.REBIRTH_MILESTONES do
+		if milestone.atRebirth == nextRebirths then
+			extraNote = (" This hits a <b>milestone</b> for an extra one-time +%d%%!"):format(
+				math.floor(milestone.bonusPct * 100))
+		end
+	end
+
+	local currentAura = EconomyBalance.getRebirthAuraTier(data.Rebirths or 0)
+	local nextAura = EconomyBalance.getRebirthAuraTier(nextRebirths)
+	local auraNote = ""
+	if nextAura and (not currentAura or currentAura.name ~= nextAura.name) then
+		auraNote = (" You'll unlock the <b>%s Aura</b>!"):format(nextAura.name)
+	end
+
+	notify(player, ("Rebirth costs <b>$%d</b>: resets cash, seeds and fruits "
+		.. "(plots and pets are kept!) for a permanent <b>+%d%%</b> sell boost.%s%s "
+		.. "Use the altar again within %d seconds to confirm!"):format(
+			cost, nextBoostPct, extraNote, auraNote, CONFIRM_WINDOW),
 		"info")
 end
 
@@ -243,11 +361,25 @@ local function buildAltar()
 	model.Parent = workspace
 end
 
+-- Called once a player's data has loaded (mirrors the dataLoaded hook pattern used by
+-- PlotService/AchievementService/etc.) so a returning player with existing Rebirths gets
+-- their aura tier re-attached, not just newly-rebirthing players in this session.
+function Service.dataLoaded(player: Player)
+	if not EconomyBalance.REBIRTH_ENABLED then
+		return
+	end
+	task.spawn(function()
+		if not player.Character then
+			player.CharacterAdded:Wait()
+		end
+		Service.refreshAura(player)
+	end)
+end
+
 function Service.init()
-	-- Rebirth is disabled per economy rebalance: don't build the altar at all, so there's no
-	-- UI/prompt to interact with. onAltarTriggered also fails closed as a defense-in-depth
-	-- measure in case an altar already exists in the saved place file. Saved data.Rebirths
-	-- counts are left untouched in DataService in case this is re-enabled later.
+	-- If REBIRTH_ENABLED is ever flipped back to false, the altar is torn down (not just
+	-- hidden) so there's no dangling UI/prompt to interact with; onAltarTriggered also fails
+	-- closed as defense-in-depth in case an altar already exists in the saved place file.
 	if EconomyBalance.REBIRTH_ENABLED then
 		buildAltar()
 	else

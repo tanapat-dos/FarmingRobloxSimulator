@@ -293,6 +293,7 @@ local function GenerateStock()
 					StockAmount = math.random(range.Min, range.Max),
 					IsInStock = true,
 					DevProduct = seed:FindFirstChild("DevProduct") and seed.DevProduct.Value or 0,
+					GrowthTime = seed:FindFirstChild("GrowthTime") and seed.GrowthTime.Value or 0,
 				})
 			end
 		end

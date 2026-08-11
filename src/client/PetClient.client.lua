@@ -161,6 +161,31 @@ local function getOwnerRoot(ownerUserId: number): BasePart?
 	return character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 end
 
+--[[
+	Follower facing correction.
+
+	spawnPet below pivots the whole model to root.CFrame every frame (see the Heartbeat
+	connection), which OVERWRITES the model's PrimaryPart rotation completely — any Orientation
+	baked into the source asset in ReplicatedStorage is discarded the instant the pet spawns.
+	So whichever way a pet visually faces once it's following the player is determined purely
+	by that mesh's own raw geometry (baked in by whoever modeled it), NOT by any editable
+	property. Some meshes happen to line up with "face = player's forward" once rotation is
+	forced to match root; others are modeled backward relative to that and need a corrective
+	180° yaw applied on top, every frame, so it can't be silently overwritten the way editing
+	Orientation in the asset was.
+
+	Read from a per-pet-model Attribute (FacingOffsetDegrees) rather than hardcoded in this
+	script, so fixing a backward pet is a one-line property edit in Studio (or by the pet
+	integration tool) instead of a script redeploy.
+]]
+local function getFacingOffset(src: Model): CFrame
+	local degrees = src:GetAttribute("FacingOffsetDegrees")
+	if typeof(degrees) ~= "number" or degrees == 0 then
+		return CFrame.new()
+	end
+	return CFrame.Angles(0, math.rad(degrees), 0)
+end
+
 local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 	despawnPet(ownerUserId)
 
@@ -175,6 +200,7 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 		return
 	end
 
+	local facingOffset = getFacingOffset(src)
 	local model = src:Clone()
 
 	for _, part in model:GetDescendants() do
@@ -206,12 +232,12 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 				local character = ownerPlayer.CharacterAdded:Wait()
 				local hrp = character:WaitForChild("HumanoidRootPart", 10)
 				if hrp and activePets[ownerUserId] and activePets[ownerUserId].model == model then
-					model:PivotTo(hrp.CFrame * CFrame.new(2.5, 0, 0))
+					model:PivotTo(hrp.CFrame * CFrame.new(2.5, 0, 0) * facingOffset)
 				end
 			end)
 		end
 	else
-		model:PivotTo(root.CFrame * CFrame.new(2.5, 0, 0))
+		model:PivotTo(root.CFrame * CFrame.new(2.5, 0, 0) * facingOffset)
 	end
 
 	model.Parent = workspace
@@ -225,7 +251,7 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 			return
 		end
 		local pivot = model:GetPivot()
-		local target = currentRoot.CFrame * CFrame.new(2.5, 0, 0)
+		local target = currentRoot.CFrame * CFrame.new(2.5, 0, 0) * facingOffset
 		model:PivotTo(pivot:Lerp(target, 0.15))
 	end)
 

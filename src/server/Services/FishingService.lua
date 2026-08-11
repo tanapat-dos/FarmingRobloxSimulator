@@ -167,6 +167,11 @@ local function awardCatch(player: Player, session: FishingSession, perfect: bool
 		msg = msg,
 	})
 	notify(player, msg, "success")
+
+	local collectionService = cachedModules.Cache.CollectionService
+	if collectionService and collectionService.discoverFish then
+		collectionService.discoverFish(player, fish.id)
+	end
 end
 
 local function pushZoneState(player: Player)

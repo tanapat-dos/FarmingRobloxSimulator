@@ -5,7 +5,7 @@
 
 local EconomyBalance = {}
 
-EconomyBalance.STARTING_CASH = 100
+EconomyBalance.STARTING_CASH = 10000
 
 -- Global seed shop restock (also shown on the seed shop HUD timer).
 EconomyBalance.SEED_SHOP = {
@@ -23,19 +23,18 @@ EconomyBalance.DAILY_LOGIN_REWARDS = {
 	{ day = 7, cash = 2000, diamonds = 10 },
 }
 
--- Plot progression: every garden has 8 physical soil beds; bed 1 is free,
--- beds 2..maxOwned are purchasable in order, the rest stay reserved.
--- Cumulative cost of all 7 purchasable beds: $4.5M. Together with the growth upgrades
--- (~$6.06M) that is ~$10.6M of sinks, tuned to complete in roughly 2-3 days of engaged play
--- and to land just before the $15M-earned Mythical unlock — so permanent upgrades finish as
--- the top crop tier opens rather than leaving the player with nothing to buy.
+-- Plot progression: every garden has 6 physical soil beds (matches new_farm's Soil folder,
+-- Bed1-Bed6); bed 1 is free, beds 2..maxOwned are purchasable in order.
+-- Plots 7-8 ($1.2M, $2.5M) were dropped when the farm model was swapped to new_farm, which
+-- only has 6 physical beds. Cumulative cost of the remaining 5 purchasable beds is $800K.
+-- Together with the growth upgrades (~$6.06M) that is ~$6.86M of sinks.
 -- Bed 2 stays cheap so the first expansion is still a first-session goal.
 EconomyBalance.PLOTS = {
 	startOwned = 1,
-	maxOwned = 8,
+	maxOwned = 6,
 	cropsPerPlot = 10,
 	-- prices[n] = cost of the nth bed (index 1 is the free starter bed)
-	prices = { 0, 5000, 20000, 75000, 200000, 500000, 1200000, 2500000 },
+	prices = { 0, 5000, 20000, 75000, 200000, 500000 },
 }
 
 -- Mature crop height in the garden (studs at plantSize 1), after per-crop mesh normalization.
@@ -70,8 +69,8 @@ EconomyBalance.PLANT_DISPLAY = {
 -- Garden upgrades purchased from the Upgrade Board (server authoritative).
 -- GrowthReduction: leveled, permanent % off crop grow time. levels[n] is the
 -- state AT level n (pct = total reduction, price = cost to go from n-1 -> n).
--- Maxing all 8 levels costs $6.06M cumulative. Paired with the plot beds ($4.5M) this is
--- ~$10.6M of sinks, targeted at roughly 2-3 days of engaged play to complete.
+-- Maxing all 8 levels costs $6.06M cumulative. Paired with the plot beds ($800K) this is
+-- ~$6.86M of sinks, targeted at roughly 2-3 days of engaged play to complete.
 EconomyBalance.UPGRADES = {
 	GrowthReduction = {
 		levels = {
@@ -87,16 +86,70 @@ EconomyBalance.UPGRADES = {
 	},
 }
 
--- Rebirth: reset cash/seeds/crops/plots for a permanent sell multiplier.
--- DISABLED per economy rebalance: the whole loop is gated off below (REBIRTH_ENABLED). The
--- altar is not built, requests are rejected server-side, and no bonus is applied — but any
--- previously-saved data.Rebirths count is left untouched in case it's re-enabled later.
-EconomyBalance.REBIRTH_ENABLED = false
+--[[
+	Rebirth: permanent progression reset loop.
+
+	Re-enabled with a redesign (previous version wiped plots too, which punished the exact
+	high-earning players rebirth is meant to reward — losing all bed progress made the reset
+	feel like a penalty, not a choice):
+	  - PLOTS ARE KEPT. Only cash, seeds, and current inventory reset. PlotsOwned and any
+	    currently-growing crops survive a rebirth untouched (see RebirthService.performRebirth).
+	  - Milestone bonuses stack on top of the flat per-rebirth boost at rebirth 5/10/25 — a
+	    permanent one-time jump, not just linear growth, so those thresholds feel like a real
+	    achievement instead of the curve being perfectly smooth.
+	  - Cosmetic aura tiers (visible to OTHER players, not just a personal stat) turn rebirth
+	    count into a status symbol. See REBIRTH_AURA_TIERS below and RebirthService's aura
+	    rig — purely visual, never affects gameplay stats.
+]]
+EconomyBalance.REBIRTH_ENABLED = true
 EconomyBalance.REBIRTH = {
 	baseCost = 250000,
 	costMult = 4, -- rebirth N costs baseCost * costMult^N
-	boostPerRebirth = 0.25, -- +25% permanent sell value per rebirth
+	boostPerRebirth = 0.25, -- +25% permanent sell value per rebirth (flat, linear)
 }
+
+-- One-time permanent bonus multiplier added ON TOP of the linear boostPerRebirth curve once a
+-- player reaches these rebirth counts. Additive with each other (all thresholds met stack).
+-- e.g. at rebirth 10: 10 * 0.25 (linear) + 0.10 (tier 5) + 0.15 (tier 10) = +2.75x total, not
+-- just +2.50x — the milestone is a visible spike in the sell-value readout, not just a number
+-- that happens to be a multiple of 5.
+EconomyBalance.REBIRTH_MILESTONES = {
+	{ atRebirth = 5, bonusPct = 0.10 },
+	{ atRebirth = 10, bonusPct = 0.15 },
+	{ atRebirth = 25, bonusPct = 0.30 },
+}
+
+function EconomyBalance.getRebirthMilestoneBonus(rebirths: number): number
+	local bonus = 0
+	for _, milestone in EconomyBalance.REBIRTH_MILESTONES do
+		if rebirths >= milestone.atRebirth then
+			bonus += milestone.bonusPct
+		end
+	end
+	return bonus
+end
+
+-- Cosmetic-only aura tiers: a colored particle ring + name-color following the player,
+-- visible to everyone (not just the owner). No stat effect — purely a status symbol other
+-- players see when they walk past a heavily-rebirthed farmer. Reuses SeedRarity's palette
+-- feel (escalating warmth/brightness) rather than inventing a new one.
+EconomyBalance.REBIRTH_AURA_TIERS = {
+	{ minRebirth = 1, color = Color3.fromRGB(190, 140, 255), name = "Violet" },   -- matches the altar crystal
+	{ minRebirth = 5, color = Color3.fromRGB(120, 200, 255), name = "Azure" },
+	{ minRebirth = 10, color = Color3.fromRGB(255, 200, 90), name = "Golden" },
+	{ minRebirth = 25, color = Color3.fromRGB(255, 90, 90), name = "Crimson" },
+}
+
+-- Returns the highest aura tier the player qualifies for, or nil below rebirth 1.
+function EconomyBalance.getRebirthAuraTier(rebirths: number): { minRebirth: number, color: Color3, name: string }?
+	local best = nil
+	for _, tier in EconomyBalance.REBIRTH_AURA_TIERS do
+		if rebirths >= tier.minRebirth then
+			best = tier
+		end
+	end
+	return best
+end
 
 --[[
 	Procedural gear (no .rbxl assets: tools are built in code like pet tools).
@@ -213,69 +266,51 @@ EconomyBalance.PET_BOOST_RANGES = {
 EconomyBalance.PET_BOOSTS = {
 	["Common Egg"] = {
 		Dog = 5,
-		Cat = 6,
-		Bear = 6,
-		Bull = 7,
-		Fox = 7,
-		Bunny = 8,
+		["Happy Dog"] = 5,
+		["Dark Dog"] = 6,
+		["White Cat"] = 6,
+		["Black Cat"] = 7,
+		["White Rabbit"] = 7,
+		["Pink Rabbit"] = 8,
 	},
 	["Uncommon Egg"] = {
-		Lizard = 12,
-		Rabbit = 13,
-		Deer = 14,
-		Star = 14,
-		Alien = 15,
-		Dragon = 16,
-		["Water Dragon"] = 18,
+		MewWat = 13,
+		["Snow Cat"] = 15,
 	},
 	["Godly Egg"] = {
-		["Sand Dweller"] = 28,
-		Varan = 30,
-		Crepitus = 32,
-		Primus = 33,
-		Gloxcinia = 34,
-		Helios = 35,
-		Aether = 36,
-		Hyperion = 38,
+		BoBo = 30,
+		Fireclouds = 32,
+		Thorney = 34,
+		Bluehoo = 38,
 	},
 	["Galactic Egg"] = {
-		["Galactic Plushie"] = 50,
-		["Galactic Hedgehog"] = 52,
-		["Galactic Saturn"] = 54,
-		["Galactic System"] = 56,
-		["Galactic Angel"] = 58,
-		["Galactic Queen"] = 60,
-		["Galactic Lord"] = 62,
-		["Galactic Overlord"] = 65,
+		Brownbear = 50,
+		Whitebear = 53,
+		Blackbear = 56,
+		PinkPig = 59,
+		GoldPig = 62,
+		Bluewing = 65,
 	},
 	["Divine Egg"] = {
-		Polygonis = 85,
-		["Divine Sun"] = 92,
-		["The Star of Lakshmi"] = 100,
+		["Sun Flare"] = 88,
+		Moon = 94,
+		["Moon Flare"] = 100,
 	},
 }
 
 -- Optional grow-time reduction % for specific pets (Godly / Galactic / Divine tiers).
 EconomyBalance.PET_GROWTH_REDUCTION = {
 	["Godly Egg"] = {
-		Varan = 5,
-		Primus = 8,
-		Gloxcinia = 10,
-		Helios = 12,
-		Aether = 15,
+		BoBo = 6,
+		Thorney = 10,
+		Bluehoo = 15,
 	},
 	["Galactic Egg"] = {
-		["Galactic Plushie"] = 6,
-		["Galactic Hedgehog"] = 8,
-		["Galactic Saturn"] = 10,
-		["Galactic System"] = 12,
-		["Galactic Angel"] = 14,
-		["Galactic Queen"] = 16,
-		["Galactic Lord"] = 18,
+		Bluewing = 18,
 	},
 	["Divine Egg"] = {
-		Polygonis = 8,
-		["Divine Sun"] = 12,
+		["Sun Flare"] = 8,
+		["Moon Flare"] = 12,
 	},
 }
 

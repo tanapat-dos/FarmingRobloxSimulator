@@ -34,8 +34,8 @@
 --]]
 
 --=============================== CONFIGURE ===============================
-local CROP_NAME = "Corn" -- display name, no " Seed" suffix
-local DRY_RUN = false -- true = report the detected stage order and change nothing
+local CROP_NAME = "Pineapple" -- display name, no " Seed" suffix
+local DRY_RUN = true -- true = report the detected stage order and change nothing
 --=========================================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

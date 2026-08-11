@@ -66,13 +66,15 @@ local COLORS = {
 
 -- Base sizes at 1x scale (roughly 1280x720 desktop). ResponsiveScale below
 -- multiplies these at runtime for higher resolutions and touch devices.
-local BTN_W       = 48
-local BTN_H       = 48
-local BAR_PAD_X   = 9
-local BAR_PAD_Y   = 8
-local BTN_GAP     = 4
-local CORNER_R    = 12
-local TOGGLE_SIZE = 48
+-- Bumped up from the original 48px — buttons read as too small/cramped,
+-- especially as a touch target on mobile.
+local BTN_W       = 64
+local BTN_H       = 64
+local BAR_PAD_X   = 12
+local BAR_PAD_Y   = 10
+local BTN_GAP     = 7
+local CORNER_R    = 14
+local TOGGLE_SIZE = 60
 
 -- Expanded list is a grid instead of one tall column, so it reads as a
 -- short, wide block (3 rows for the current 11 buttons) instead of a
@@ -93,8 +95,8 @@ local BAR_HIDDEN_OFFSET = UDim2.new(0, -BAR_MAX_WIDTH - 20, 0.1, 0)
 local REFERENCE_VIEWPORT_WIDTH = 1280
 local DESKTOP_MIN_SCALE = 0.95
 local DESKTOP_MAX_SCALE = 1.35
-local TOUCH_MULTIPLIER = 1.25
-local TOUCH_MAX_SCALE = 1.85
+local TOUCH_MULTIPLIER = 1.1
+local TOUCH_MAX_SCALE = 1.6
 
 local function computeResponsiveScale(): number
 	local camera = workspace.CurrentCamera
@@ -125,15 +127,18 @@ local ALL_BUTTONS = {
 	{ name = "FishingTeleport",   template = "BtnTemplate_Generic",  icon = "🎣", label = "Fishing" },
 	{ name = "FishShopBtn",       template = "BtnTemplate_Generic",  icon = "🐟", label = "Fish Shop", panel = "FishCoinShop" },
 	{ name = "RebirthTeleport",   template = "BtnTemplate_Rebirth",  label = "Rebirth" },
+	{ name = "RebirthBoardBtn",   template = "BtnTemplate_Generic",  icon = "🏆", label = "Leaderboard", panel = "RebirthLeaderboard" },
 	{ name = "AchievementsBtn",   template = "BtnTemplate_Book",     label = "Achieve",  panel = "Achievements" },
+	{ name = "CollectionBtn",     template = "BtnTemplate_Book",     icon = "📖", label = "Collection", panel = "Collection" },
 	{ name = "DailyLoginBtn",     template = "BtnTemplate_Gift",     label = "Daily",    panel = "DailyLogin" },
 }
 
--- Rebirth is disabled per economy rebalance: drop the button entirely rather than leaving a
--- dead/disabled entry in the bar.
+-- Rebirth is disabled per economy rebalance: drop both Rebirth buttons entirely rather than
+-- leaving dead/disabled entries in the bar.
+local REBIRTH_ONLY_BUTTONS = { RebirthTeleport = true, RebirthBoardBtn = true }
 local BUTTONS = {}
 for _, def in ALL_BUTTONS do
-	if def.name ~= "RebirthTeleport" or EconomyBalance.REBIRTH_ENABLED then
+	if not REBIRTH_ONLY_BUTTONS[def.name] or EconomyBalance.REBIRTH_ENABLED then
 		table.insert(BUTTONS, def)
 	end
 end
@@ -165,7 +170,7 @@ local function buildHamburgerIcon(parent: GuiObject): (Frame, { Frame })
 	iconFrame.Name = "Icon"
 	iconFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	iconFrame.Position = UDim2.fromScale(0.5, 0.5)
-	iconFrame.Size = UDim2.fromOffset(22, 18)
+	iconFrame.Size = UDim2.fromOffset(28, 22)
 	iconFrame.BackgroundTransparency = 1
 	iconFrame.Parent = parent
 
@@ -213,6 +218,18 @@ local function findRebirthAltarPart(): BasePart?
 		return pedestal
 	end
 	return altar:FindFirstChildWhichIsA("BasePart")
+end
+
+local function findRebirthBoardPart(): BasePart?
+	local board = workspace:FindFirstChild("RebirthPriceBoard")
+	if not board then
+		return nil
+	end
+	local sign = board:FindFirstChild("Sign")
+	if sign and sign:IsA("BasePart") then
+		return sign
+	end
+	return board:FindFirstChildWhichIsA("BasePart")
 end
 
 local function findBridgePart(): BasePart?
@@ -414,7 +431,7 @@ local function makeBar()
 			label.Text = def.label
 			label.TextScaled = true
 			local sizeConstraint = Instance.new("UITextSizeConstraint")
-			sizeConstraint.MaxTextSize = 10
+			sizeConstraint.MaxTextSize = 13
 			sizeConstraint.Parent = label
 		end
 
@@ -475,6 +492,19 @@ local function makeBar()
 				if altarPart then
 					hrp.CFrame = CFrame.new(altarPart.Position + Vector3.new(0, 3, 0))
 				end
+			elseif def.name == "RebirthBoardBtn" and hrp then
+				-- Teleport to the physical board first, then fall through below to also
+				-- open the podium panel — clicking "Leaderboard" should feel like walking up
+				-- to the sign and triggering it, not just opening a floating panel.
+				local boardPart = findRebirthBoardPart()
+				if boardPart then
+					hrp.CFrame = CFrame.new(boardPart.Position + Vector3.new(0, 3, 0))
+				end
+				local signals = ReplicatedStorage:FindFirstChild("ClientSignals")
+				local toggleEvent = signals and signals:FindFirstChild("ToggleRebirthLeaderboard")
+				if toggleEvent then
+					(toggleEvent :: BindableEvent):Fire()
+				end
 			elseif def.name == "FishingTeleport" and hrp then
 				local bridgePart = findBridgePart()
 				if bridgePart then
@@ -505,6 +535,16 @@ local function makeBar()
 			elseif def.panel == "FishCoinShop" then
 				local fcGui = playerGui:FindFirstChild("FishCoinShopGui")
 				local panel = fcGui and fcGui:FindFirstChild("Panel")
+				if panel then
+					panel.Visible = not panel.Visible
+				end
+			elseif def.panel == "Collection" then
+				local collectionRemote = remotes:FindFirstChild("Collection")
+				if collectionRemote then
+					collectionRemote:FireServer("request")
+				end
+				local colGui = playerGui:FindFirstChild("CollectionGui")
+				local panel = colGui and colGui:FindFirstChild("Panel")
 				if panel then
 					panel.Visible = not panel.Visible
 				end

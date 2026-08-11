@@ -16,6 +16,7 @@ local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local petMenu = remotes:WaitForChild("PetMenu")
 local petUse = remotes:WaitForChild("PetUse")
+local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
 
 local COLORS = {
 	panel = Color3.fromRGB(25, 28, 36),
@@ -78,7 +79,7 @@ local function buildUi()
 	stroke.Parent = panel
 
 	headerLabel = Instance.new("TextLabel")
-	headerLabel.Size = UDim2.new(1, -24, 0, 44)
+	headerLabel.Size = UDim2.new(1, -60, 0, 44)
 	headerLabel.Position = UDim2.fromOffset(14, 4)
 	headerLabel.BackgroundTransparency = 1
 	headerLabel.Text = "🐾 My Pets"
@@ -88,6 +89,21 @@ local function buildUi()
 	headerLabel.Font = Enum.Font.GothamBold
 	headerLabel.TextSize = 20
 	headerLabel.Parent = panel
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "Close"
+	closeButton.AnchorPoint = Vector2.new(1, 0)
+	closeButton.Position = UDim2.new(1, -10, 0, 10)
+	closeButton.Size = UDim2.fromOffset(32, 32)
+	closeButton.BackgroundColor3 = COLORS.close
+	closeButton.Text = ""
+	closeButton.Parent = panel
+	corner(closeButton, 8)
+	CloseIconUi.build(closeButton, { color = COLORS.text })
+
+	closeButton.MouseButton1Click:Connect(function()
+		panel.Visible = false
+	end)
 
 	listFrame = Instance.new("ScrollingFrame")
 	listFrame.Name = "List"

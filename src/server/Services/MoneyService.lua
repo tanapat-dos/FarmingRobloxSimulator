@@ -249,15 +249,19 @@ end
 function Service.getCashMultiplier(target: Player): number
 	local EconomyBalance = require(modules.EconomyBalance)
 
-	-- Rebirth is disabled (EconomyBalance.REBIRTH_ENABLED = false): no bonus is applied even
-	-- if a player has a saved data.Rebirths count from before the system was turned off.
+	-- If rebirth is ever disabled again, no bonus applies even with a saved data.Rebirths
+	-- count from a time when it was active.
 	local rebirthMultiplier = 1
 	if EconomyBalance.REBIRTH_ENABLED then
 		local rebirths = target:GetAttribute("Rebirths")
 		if typeof(rebirths) ~= "number" then
 			rebirths = 0
 		end
-		rebirthMultiplier = 1 + rebirths * EconomyBalance.REBIRTH.boostPerRebirth
+		-- Linear per-rebirth boost PLUS any one-time milestone bonus (5/10/25) already
+		-- reached — additive on top of the linear curve, not folded into it, so milestone
+		-- thresholds read as a visible spike in the sell-value readout.
+		local milestoneBonus = EconomyBalance.getRebirthMilestoneBonus(rebirths)
+		rebirthMultiplier = 1 + rebirths * EconomyBalance.REBIRTH.boostPerRebirth + milestoneBonus
 	end
 
 	return (target:GetAttribute("FriendBoost") or 1)

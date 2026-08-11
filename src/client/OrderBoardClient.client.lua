@@ -82,11 +82,11 @@ local function buildPanel()
 	closeButton.Name = "Close"
 	closeButton.AnchorPoint = Vector2.new(1, 0)
 	closeButton.Position = UDim2.new(1, -10, 0, 10)
-	closeButton.Size = UDim2.fromOffset(32, 32)
+	closeButton.Size = UDim2.fromOffset(40, 40)
 	closeButton.BackgroundColor3 = COLORS.close
 	closeButton.Text = ""
 	closeButton.Parent = panel
-	corner(closeButton, 8)
+	corner(closeButton, 10)
 	CloseIconUi.build(closeButton, { color = COLORS.text })
 	closeButton.MouseButton1Click:Connect(function()
 		gui.Enabled = false

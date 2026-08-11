@@ -191,6 +191,84 @@ local function findOwnedPet(data, petId: string)
 	return nil
 end
 
+local function petModelExists(eggName: string, petName: string): boolean
+	local folder = petsAssets:FindFirstChild(eggName)
+	return folder ~= nil and folder:FindFirstChild(petName) ~= nil
+end
+
+local function getEggPetNames(eggName: string): { string }
+	local folder = petsAssets:FindFirstChild(eggName)
+	if not folder then
+		return {}
+	end
+	local names = {}
+	for _, child in folder:GetChildren() do
+		if child:IsA("Model") then
+			table.insert(names, child.Name)
+		end
+	end
+	table.sort(names)
+	return names
+end
+
+--[[
+	Repairs a pet record left over from a since-removed/renamed pet model (an egg's lineup got
+	swapped, e.g. Common Egg's Bear/Cat/Bull/Fox/Bunny -> Dog/Happy Dog/Dark Dog/White Cat/
+	Black Cat/White Rabbit/Pink Rabbit). Without this, resolvePetBoost still returns a usable
+	cached boost (it falls back to pet.boost), so the stat bonus quietly keeps working — but
+	PetClient.spawnPet's FindFirstChild(petName) comes back nil, so nothing ever shows up and
+	equip silently does nothing. That reads as "equip is broken" even though the numbers are
+	fine underneath.
+
+	Remap is deterministic (first pet alphabetically still present in that egg's folder) rather
+	than a hand-authored table, so this self-heals for ANY future asset swap, not just this one.
+]]
+local function repairOrphanedPetName(pet): boolean
+	if petModelExists(pet.egg, pet.name) then
+		return false
+	end
+	local names = getEggPetNames(pet.egg)
+	if #names == 0 then
+		return false
+	end
+	pet.name = names[1]
+	pet.boost = EconomyBalance.getPetBoostMultiplier(pet.egg, pet.name)
+	pet.growthReduction = EconomyBalance.getPetGrowthReductionPct(pet.egg, pet.name)
+	return true
+end
+
+local function repairOrphanedPets(player: Player, data)
+	local changed = false
+	for _, pet in ipairs(data.OwnedPets or {}) do
+		if repairOrphanedPetName(pet) then
+			changed = true
+		end
+	end
+
+	if data.EquippedPet then
+		local owned = findOwnedPet(data, data.EquippedPet.id)
+		if owned then
+			if data.EquippedPet.name ~= owned.name then
+				data.EquippedPet.name = owned.name
+				data.EquippedPet.boost = owned.boost
+				data.EquippedPet.growthReduction = owned.growthReduction
+				changed = true
+			end
+		elseif not petModelExists(data.EquippedPet.egg, data.EquippedPet.name) then
+			-- No owned record to repair from and the model is gone — nothing left to equip.
+			data.EquippedPet = nil
+			changed = true
+		end
+	end
+
+	if changed then
+		local notifyRemote = remotes:FindFirstChild("Notify")
+		if notifyRemote then
+			notifyRemote:FireClient(player, "Some of your pets were updated after a pet asset change.", "info")
+		end
+	end
+end
+
 local function applyPetBonuses(player: Player, pet)
 	local boost = resolvePetBoost(pet)
 	local growthReduction = resolvePetGrowthReduction(pet)
@@ -217,6 +295,7 @@ function Service.pushPetList(player: Player)
 	end
 
 	ensurePetIds(data)
+	repairOrphanedPets(player, data)
 	local equippedId = data.EquippedPet and data.EquippedPet.id
 
 	local payload = {}
@@ -444,6 +523,11 @@ function Service.rollEgg(player: Player, eggName: string)
 	local achieveService = cachedModules.Cache.AchievementService
 	if achieveService and achieveService.syncPetsOwned then
 		achieveService.syncPetsOwned(player)
+	end
+
+	local collectionService = cachedModules.Cache.CollectionService
+	if collectionService and collectionService.discoverPet then
+		collectionService.discoverPet(player, eggName, petName)
 	end
 
 	local r = {

@@ -408,8 +408,10 @@ local function buildGui()
 	if UserInputService.TouchEnabled then
 		actionButton = Instance.new("TextButton")
 		actionButton.Name = "TouchAction"
-		actionButton.AnchorPoint = Vector2.new(0.5, 1)
-		actionButton.Position = UDim2.new(0.5, 0, 1, -180)
+		-- Right side, above Roblox's built-in jump button (bottom-right corner) so it doesn't
+		-- overlap that or sit dead-center where it blocks the view of the marker/catch zone.
+		actionButton.AnchorPoint = Vector2.new(1, 1)
+		actionButton.Position = UDim2.new(1, -24, 1, -260)
 		actionButton.Size = UDim2.fromOffset(160, 64)
 		actionButton.BackgroundColor3 = COLORS.zone
 		actionButton.Text = "Cast"

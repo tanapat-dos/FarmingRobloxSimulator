@@ -46,6 +46,9 @@ function Service.init()
 	local gardenUpgradeService = cachedModules.Cache.GardenUpgradeService
 	local dailyLoginService = cachedModules.Cache.DailyLoginService
 	local achievementService = cachedModules.Cache.AchievementService
+	local collectionService = cachedModules.Cache.CollectionService
+	local rebirthService = cachedModules.Cache.RebirthService
+	local rebirthLeaderboardService = cachedModules.Cache.RebirthLeaderboardService
 
 	local function onCharacterAdded(character: Model)
 		inventoryService.characterAdded(character)
@@ -64,6 +67,15 @@ function Service.init()
 			end
 			if achievementService and achievementService.dataLoaded then
 				achievementService.dataLoaded(player)
+			end
+			if collectionService and collectionService.dataLoaded then
+				collectionService.dataLoaded(player)
+			end
+			if rebirthService and rebirthService.dataLoaded then
+				rebirthService.dataLoaded(player)
+			end
+			if rebirthLeaderboardService and rebirthLeaderboardService.dataLoaded then
+				rebirthLeaderboardService.dataLoaded(player)
 			end
 
 			if player.Character then

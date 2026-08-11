@@ -83,6 +83,10 @@
           "$path": "src/server/Services/RebirthService.lua"
         },
 
+        "RebirthLeaderboardService": {
+          "$path": "src/server/Services/RebirthLeaderboardService.lua"
+        },
+
         "GearService": {
           "$path": "src/server/Services/GearService.lua"
         },
@@ -109,6 +113,14 @@
 
         "FishingService": {
           "$path": "src/server/Services/FishingService.lua"
+        },
+
+        "CollectionService": {
+          "$path": "src/server/Services/CollectionService.lua"
+        },
+
+        "CaveService": {
+          "$path": "src/server/Services/CaveService.lua"
         }
       }
     },
@@ -241,6 +253,14 @@
 
         "Toasts": {
           "$path": "src/client/Toasts.client.lua"
+        },
+
+        "CollectionClient": {
+          "$path": "src/client/CollectionClient.client.lua"
+        },
+
+        "RebirthLeaderboardClient": {
+          "$path": "src/client/RebirthLeaderboardClient.client.lua"
         }
       }
     },

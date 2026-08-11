@@ -22,8 +22,8 @@ local currentWeather = "Sunny"
 local HUD_RIGHT_INSET = 12
 local HUD_STACK_TOP = 8
 local HUD_STACK_GAP = 4
-local HUD_ROW_HEIGHT = 28
-local HUD_DIAMOND_ROW_HEIGHT = 34
+local HUD_ROW_HEIGHT = 34
+local HUD_DIAMOND_ROW_HEIGHT = 40
 local HUD_STACK_WIDTH = 340
 local DIAMOND_TEXT_COLOR = Color3.fromRGB(120, 210, 255)
 local DEFAULT_RESTOCK_SECONDS = 300
@@ -172,7 +172,7 @@ local function makeHudRow(name: string, width: number, textColor: Color3): TextL
 	label.BackgroundTransparency = 0.15
 	label.TextColor3 = textColor
 	label.Font = Enum.Font.GothamBold
-	label.TextSize = 14
+	label.TextSize = 19
 	label.TextXAlignment = Enum.TextXAlignment.Center
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
@@ -294,7 +294,7 @@ local function ensureHud(): (TextLabel, TextLabel)
 	diamond.Text = "💎 0"
 	diamond.TextColor3 = DIAMOND_TEXT_COLOR
 	diamond.Font = Enum.Font.GothamBold
-	diamond.TextSize = 18
+	diamond.TextSize = 24
 	diamond.TextXAlignment = Enum.TextXAlignment.Center
 	diamond.Parent = stack
 
@@ -312,7 +312,7 @@ local function ensureHud(): (TextLabel, TextLabel)
 
 	local clock = makeHudRow("Clock", 130, Color3.fromRGB(235, 240, 250))
 	clock.LayoutOrder = 2
-	clock.TextSize = 15
+	clock.TextSize = 20
 	clock.TextStrokeTransparency = 0.65
 	clock.Parent = stack
 	clockLabel = clock
@@ -340,7 +340,7 @@ local function ensureHud(): (TextLabel, TextLabel)
 	weather.TextColor3 = Color3.fromRGB(235, 240, 250)
 	weather.TextStrokeTransparency = 0.6
 	weather.Font = Enum.Font.GothamBold
-	weather.TextSize = 13
+	weather.TextSize = 17
 	weather.TextWrapped = true
 	weather.RichText = true
 	weather.TextXAlignment = Enum.TextXAlignment.Center

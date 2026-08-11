@@ -8,6 +8,7 @@ local template = {
 	PlotData = {},
 	OwnedPets = {},
 	EquippedPet = nil,
+	Collection = { Crops = {}, Fish = {}, Pets = {}, Mutations = {} },
 	OrderStats = { Completed = 0 },
 	FishingStats = { TotalCaught = 0, PerfectCasts = 0 },
 	PlotsOwned = EconomyBalance.PLOTS.startOwned,
