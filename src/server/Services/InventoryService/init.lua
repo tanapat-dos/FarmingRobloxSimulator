@@ -5,14 +5,12 @@ local HttpService = game:GetService("HttpService")
 
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local seedStorage = ServerStorage:WaitForChild("CropSeeds")
-local toolStorage = ServerStorage:WaitForChild("Tools")
 
 local seedDataModule = require(modules.SeedData)
 local EconomyBalance = require(modules.EconomyBalance)
 local fruitNameParser = require(modules.FruitNameParse)
 local fruitDisplayName = require(modules.FruitDisplayName)
 local fruitInventoryFormat = require(modules.FruitInventoryFormat)
-local ToolData = require(modules.ToolData)
 local PlantVisualScale = require(modules.PlantVisualScale)
 local cachedModules = require(script.Parent.Parent.Server.CachedModules)
 
@@ -186,6 +184,20 @@ function Service.createNewTool(player: Player, toolName: string)
 	-- ✅ Procedural gear (Fertilizer etc.) — tool built entirely in code
 	local proceduralGear = EconomyBalance.GEAR and EconomyBalance.GEAR[toolName]
 	if proceduralGear then
+		-- nonConsumable gear (Pickaxe): a real, permanently-owned tool with its own dedicated
+		-- geometry (MiningConfig.buildPickaxeTool) and no consume-on-use activator — using it
+		-- doesn't burn a charge, so it never needs the "(X1)" count suffix either.
+		if proceduralGear.nonConsumable then
+			if toolName == "Pickaxe" then
+				local MiningConfig = require(modules.MiningConfig)
+				local tool = MiningConfig.buildPickaxeTool()
+				tool:SetAttribute("Name", toolName)
+				tool:SetAttribute("isGear", true)
+				tool.Parent = player.Backpack
+			end
+			return
+		end
+
 		local tool = Instance.new("Tool")
 		tool.Name = toolName .. " (X" .. tostring(itemData.Count) .. ")"
 		tool.ToolTip = proceduralGear.description or toolName
@@ -212,27 +224,7 @@ function Service.createNewTool(player: Player, toolName: string)
 		return
 	end
 
-	local gearInfo = ToolData.getData(toolName)
-
-	local isGear = toolStorage:FindFirstChild(toolName)
 	local isSeed = seedStorage:FindFirstChild(toolName)
-
-	-- ✅ Gear Tool
-	if gearInfo and isGear then
-		local toolClone = isGear:Clone()
-		toolClone.Name = toolName .. " (X" .. tostring(itemData.Count) .. ")"
-		toolClone:SetAttribute("Name", toolName)
-		toolClone:SetAttribute("Count", itemData.Count)
-		toolClone:SetAttribute("isGear", true)
-
-		toolClone.Parent = player.Backpack
-		
-		local gearActivator = script.GearActivator:Clone()
-		gearActivator.Parent = toolClone
-		require(gearActivator)
-
-		return
-	end
 
 	-- ✅ Seed Tool
 	if isSeed then
@@ -254,7 +246,7 @@ function Service.createNewTool(player: Player, toolName: string)
 		return
 	end
 
-	if not isSeed and not isGear then
+	if not isSeed then
 	-- ✅ Fruit (mutated)
 		local rarity, mutations, weight, fruitName = fruitNameParser(itemData)
 		if weight > 0 and fruitName then
@@ -358,8 +350,7 @@ function Service.inventoryUpdated(player : Player, ...)
 				-- IS A SEED/GEAR/OR OTHER
 				local seedToolName = itemUpdated
 				local isSeed = seedStorage:FindFirstChild(seedToolName)
-				local isGear = toolStorage:FindFirstChild(itemUpdated)
-					or (EconomyBalance.GEAR and EconomyBalance.GEAR[itemUpdated])
+				local isGear = EconomyBalance.GEAR and EconomyBalance.GEAR[itemUpdated]
 				if isSeed then
 					local foundItem = nil
 					for _,v in player.Backpack:GetChildren() do

@@ -32,6 +32,14 @@ local function fireRebirthLeaderboardOpen()
 	end
 end
 
+local function fireGearShopOpen()
+	local cs = ReplicatedStorage:FindFirstChild("ClientSignals")
+	if cs then
+		local toggle = cs:FindFirstChild("ToggleGearShop")
+		if toggle then toggle:Fire("open") end
+	end
+end
+
 --// Assets
 local DialogueTemplate = ReplicatedStorage:WaitForChild("DialogueGUI")
 local SellDisplay = ReplicatedStorage:WaitForChild("SellGUI")
@@ -440,6 +448,10 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 		-- QOL: no dialogue delay — the pet shop panel opens the instant E is pressed.
 		firePetShopOpen()
 		toggleAllPrompts(true)
+	elseif prompt.Name == "OpenGearShop" then
+		-- QOL: no dialogue delay — the gear shop panel opens the instant E is pressed.
+		fireGearShopOpen()
+		toggleAllPrompts(true)
 	elseif prompt.Name == "CropPriceBoard" then
 		fireCropPriceBoardOpen()
 		task.delay(0.5, function()
@@ -467,7 +479,7 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
 	-- rebirth altar, order board, etc.) would leave ALL prompts disabled forever.
 	-- Re-enable after a short beat so their own panel/remote fires first.
 	local handledNames = {
-		OpenShop = true, SellShop = true, OpenPetShop = true,
+		OpenShop = true, SellShop = true, OpenPetShop = true, OpenGearShop = true,
 		CropPriceBoard = true, RebirthPriceBoard = true, HarvestPrompt = true, BuyPrompt = true,
 	}
 	if not handledNames[prompt.Name] then

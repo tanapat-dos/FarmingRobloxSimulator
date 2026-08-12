@@ -121,6 +121,10 @@
 
         "CaveService": {
           "$path": "src/server/Services/CaveService.lua"
+        },
+
+        "MiningService": {
+          "$path": "src/server/Services/MiningService.lua"
         }
       }
     },
@@ -181,6 +185,10 @@
 
         "PetClient": {
           "$path": "src/client/PetClient.client.lua"
+        },
+
+        "GearShopClient": {
+          "$path": "src/client/GearShopClient.client.lua"
         },
 
         "PetRollAnimation": {
@@ -261,6 +269,10 @@
 
         "RebirthLeaderboardClient": {
           "$path": "src/client/RebirthLeaderboardClient.client.lua"
+        },
+
+        "MiningClient": {
+          "$path": "src/client/MiningClient.client.lua"
         }
       }
     },
@@ -374,6 +386,10 @@
 
         "FishingStandRegistry": {
           "$path": "src/shared/Modules/FishingStandRegistry.lua"
+        },
+
+        "MiningConfig": {
+          "$path": "src/shared/Modules/MiningConfig.lua"
         },
 
         "SeedToolVisual": {

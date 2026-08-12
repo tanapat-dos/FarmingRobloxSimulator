@@ -1,12 +1,16 @@
 --[[
-	GearService — supply kiosk selling procedural consumable gear.
+	GearService — sells procedural gear (Fertilizer, Mutation Spray, Pickaxe) through two
+	entry points that share the same catalog and purchase logic:
 
-	Gear is defined in EconomyBalance.GEAR; tools are built entirely in
-	code (InventoryService's procedural-gear branch), so no .rbxl assets
-	are needed. The kiosk is one crate per gear item, each with its own
-	buy prompt — feedback flows through the Notify toasts.
+	  1. A physical crate kiosk near the Seed Shop (buildKiosk) — walk up, hold E on a crate.
+	  2. Maddy the Gear NPC's "OpenGearShop" prompt (GearShopClient.client.lua panel) — the
+	     client reads EconomyBalance.GEAR directly (no catalog push needed, unlike the
+	     seed/fish-coin shops with rolling stock) and fires the BuyGear remote below.
 
-	Reposition by adding a Part named "GearKioskAnchor".
+	Tools are built entirely in code (InventoryService's procedural-gear branch), so no .rbxl
+	assets are needed. Feedback for both entry points flows through the Notify toasts.
+
+	Reposition the crate kiosk by adding a Part named "GearKioskAnchor".
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -44,17 +48,29 @@ local function buyGear(player: Player, gearName: string)
 		return
 	end
 
-	-- config.price is the floor only; the crop-scaled remainder is charged on use.
+	-- nonConsumable gear (e.g. Pickaxe): a flat one-time purchase, not a stacking charge
+	-- count — block re-buying once already owned instead of letting Count climb pointlessly.
+	if config.nonConsumable and data.Inventory[gearName] then
+		notify(player, ("You already own a %s!"):format(gearName), "info")
+		return
+	end
+
+	-- config.price is the floor only for consumables; the crop-scaled remainder is charged on
+	-- use. nonConsumable gear has no remainder — price is the full, final cost.
 	if not moneyService.removeCash(player, config.price) then
 		notify(player, ("You need $%d for %s."):format(config.price, gearName), "error")
 		return
 	end
 
-	local entry = data.Inventory[gearName]
-	if entry and entry.Count then
-		entry.Count += 1
-	else
+	if config.nonConsumable then
 		data.Inventory[gearName] = { Count = 1 }
+	else
+		local entry = data.Inventory[gearName]
+		if entry and entry.Count then
+			entry.Count += 1
+		else
+			data.Inventory[gearName] = { Count = 1 }
+		end
 	end
 
 	inventoryService.inventoryUpdated(player, gearName)
@@ -84,18 +100,34 @@ local function buildKiosk()
 	local model = Instance.new("Model")
 	model.Name = "GearKiosk"
 
-	-- Market-stall proportions: counter fitted to the crates on it, with
-	-- rear posts holding a slanted awning so the stand reads as a shop.
+	local gearNames = {}
+	for gearName in EconomyBalance.GEAR do
+		table.insert(gearNames, gearName)
+	end
+	table.sort(gearNames, function(a, b)
+		return EconomyBalance.GEAR[a].price < EconomyBalance.GEAR[b].price
+	end)
+
+	-- Market-stall proportions: counter/awning width scales with crate count so the
+	-- stall always fits however many gear items exist (was hardcoded for exactly 2).
+	local CRATE_SIZE = 1.6
+	local CRATE_SPACING = 2.5
+	local COUNTER_MARGIN = 1.1 -- clearance beyond the outermost crate edges
+	local numGear = math.max(#gearNames, 1)
+	local counterWidth = (numGear - 1) * CRATE_SPACING + CRATE_SIZE + COUNTER_MARGIN
+	local awningWidth = counterWidth + 0.6
+	local postSideX = counterWidth / 2 - 0.3
+
 	local counter = Instance.new("Part")
 	counter.Name = "Counter"
-	counter.Size = Vector3.new(5.2, 1, 2.4)
+	counter.Size = Vector3.new(counterWidth, 1, 2.4)
 	counter.CFrame = baseCFrame * CFrame.new(0, 0.5, 0)
 	counter.Material = Enum.Material.WoodPlanks
 	counter.Color = Color3.fromRGB(124, 92, 60)
 	counter.Anchored = true
 	counter.Parent = model
 
-	for _, sideX in { -2.3, 2.3 } do
+	for _, sideX in { -postSideX, postSideX } do
 		local awningPost = Instance.new("Part")
 		awningPost.Name = "AwningPost"
 		awningPost.Size = Vector3.new(0.4, 4.6, 0.4)
@@ -108,7 +140,7 @@ local function buildKiosk()
 
 	local awning = Instance.new("Part")
 	awning.Name = "Awning"
-	awning.Size = Vector3.new(5.8, 0.25, 3.4)
+	awning.Size = Vector3.new(awningWidth, 0.25, 3.4)
 	awning.CFrame = baseCFrame * CFrame.new(0, 4.75, 0.1) * CFrame.Angles(math.rad(-10), 0, 0)
 	awning.Material = Enum.Material.Fabric
 	awning.Color = Color3.fromRGB(178, 90, 74)
@@ -116,21 +148,16 @@ local function buildKiosk()
 	awning.CanCollide = false
 	awning.Parent = model
 
+	-- Crates are centered as a group instead of assuming exactly 2 (old: -1.25 + index*2.5).
 	local index = 0
-	local gearNames = {}
-	for gearName in EconomyBalance.GEAR do
-		table.insert(gearNames, gearName)
-	end
-	table.sort(gearNames, function(a, b)
-		return EconomyBalance.GEAR[a].price < EconomyBalance.GEAR[b].price
-	end)
+	local groupOffset = -((numGear - 1) * CRATE_SPACING) / 2
 
 	for _, gearName in gearNames do
 		local config = EconomyBalance.GEAR[gearName]
 		local crate = Instance.new("Part")
 		crate.Name = gearName
 		crate.Size = Vector3.new(1.6, 1.6, 1.6)
-		crate.CFrame = baseCFrame * CFrame.new(-1.25 + index * 2.5, 1.8, 0)
+		crate.CFrame = baseCFrame * CFrame.new(groupOffset + index * CRATE_SPACING, 1.8, 0)
 		crate.Material = Enum.Material.Wood
 		crate.Color = config.color or Color3.fromRGB(124, 92, 60)
 		crate.Anchored = true
@@ -147,9 +174,11 @@ local function buildKiosk()
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundColor3 = Color3.fromRGB(25, 28, 36)
 		label.BackgroundTransparency = 0.3
-		-- "from $X": config.price is only the floor charged here. The remainder is collected at
-		-- use time once the target crop is known (see EconomyBalance.GEAR / GearUseActivator).
-		label.Text = ("%s\nfrom $%d"):format(gearName, config.price)
+		-- nonConsumable gear (Pickaxe) has a flat, final price — no "from" wording since there
+		-- is no crop-scaled remainder charged later, unlike Fertilizer/Mutation Spray.
+		label.Text = config.nonConsumable
+			and ("%s\n$%d"):format(gearName, config.price)
+			or ("%s\nfrom $%d"):format(gearName, config.price)
 		label.TextColor3 = Color3.fromRGB(235, 240, 250)
 		label.Font = Enum.Font.GothamBold
 		label.TextScaled = true
@@ -160,7 +189,9 @@ local function buildKiosk()
 		corner.Parent = label
 
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = ("Buy — from $%d"):format(config.price)
+		prompt.ActionText = config.nonConsumable
+			and ("Buy — $%d"):format(config.price)
+			or ("Buy — from $%d"):format(config.price)
 		prompt.ObjectText = gearName
 		prompt.HoldDuration = 0.25
 		prompt.MaxActivationDistance = 10
@@ -179,6 +210,19 @@ end
 
 function Service.init()
 	buildKiosk()
+
+	-- Maddy the Gear NPC (Workspace.Shops.Characters.Gear, "OpenGearShop" prompt) opens
+	-- GearShopClient.client.lua's panel; the panel reads EconomyBalance.GEAR directly (shared
+	-- ReplicatedStorage module, no catalog push needed) and fires this remote to buy.
+	local buyGearRemote = remotes:FindFirstChild("BuyGear")
+	if buyGearRemote then
+		buyGearRemote.OnServerEvent:Connect(function(player, gearName)
+			if typeof(gearName) ~= "string" then
+				return
+			end
+			buyGear(player, gearName)
+		end)
+	end
 end
 
 return Service

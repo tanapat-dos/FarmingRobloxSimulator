@@ -176,6 +176,15 @@ EconomyBalance.GEAR = {
 		description = "Sprays your nearest crop: guaranteed Golden. Higher-tier crops cost "
 			.. "more to spray (charged when used). Cannot target Mango or Crystal Blooms.",
 	},
+	-- nonConsumable = true: a flat one-time purchase, not a stacking charge count like the
+	-- two above. GearService.buyGear blocks re-buying once owned; InventoryService builds the
+	-- real MiningConfig.buildPickaxeTool() instead of a generic consumable-gear tool.
+	["Pickaxe"] = {
+		price = 1000,
+		nonConsumable = true,
+		color = Color3.fromRGB(140, 140, 148),
+		description = "Required to mine ore nodes in the cave. Buy once, keep forever.",
+	},
 }
 
 --[[
