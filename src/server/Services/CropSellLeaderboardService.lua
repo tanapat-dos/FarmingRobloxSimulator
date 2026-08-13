@@ -127,6 +127,26 @@ local function getPlatformBackZ(shops: Instance, fallbackZ: number): number
 	return maxZ - PLATFORM_BACK_MARGIN
 end
 
+-- NOTE: must be declared before getBoardPlacement, which calls it — a later
+-- `local function` declaration would compile the call site as a nil global.
+local function getBoardViewTarget(shops: Instance): Vector3
+	local sellShop = shops:FindFirstChild("SellStuff")
+	local tpPart = sellShop and sellShop:FindFirstChild("TPPart")
+	if tpPart and tpPart:IsA("BasePart") then
+		return tpPart.Position
+	end
+
+	for _, shopName in { "SeedShop", "PetShop" } do
+		local model = shops:FindFirstChild(shopName)
+		local tp = model and model:FindFirstChild("TPPart")
+		if tp and tp:IsA("BasePart") then
+			return tp.Position
+		end
+	end
+
+	return Vector3.new(0, 0, 0)
+end
+
 local function getBoardPlacement(shops: Instance): (Vector3, CFrame)
 	local anchor = shops:FindFirstChild(ANCHOR_NAME)
 	if anchor and anchor:IsA("BasePart") then
@@ -172,24 +192,6 @@ local function getBoardPlacement(shops: Instance): (Vector3, CFrame)
 	local signPosition = Vector3.new(floorPosition.X, signCenterY, floorPosition.Z)
 	local viewTarget = getBoardViewTarget(shops)
 	return floorPosition, CropSellPriceBoard.getSignCFrame(signPosition, viewTarget)
-end
-
-local function getBoardViewTarget(shops: Instance): Vector3
-	local sellShop = shops:FindFirstChild("SellStuff")
-	local tpPart = sellShop and sellShop:FindFirstChild("TPPart")
-	if tpPart and tpPart:IsA("BasePart") then
-		return tpPart.Position
-	end
-
-	for _, shopName in { "SeedShop", "PetShop" } do
-		local model = shops:FindFirstChild(shopName)
-		local tp = model and model:FindFirstChild("TPPart")
-		if tp and tp:IsA("BasePart") then
-			return tp.Position
-		end
-	end
-
-	return Vector3.new(0, 0, 0)
 end
 
 local function makeWoodPart(name: string, size: Vector3, color: Color3?): Part

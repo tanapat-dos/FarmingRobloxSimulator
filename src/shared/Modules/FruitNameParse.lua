@@ -24,8 +24,11 @@ local function parseFruitInfo(fruitName: string)
 		remaining = remaining:gsub("^%[[^%]]+%]%s*", "", 1)
 	end
 
-	local weightStr = remaining:match("%[(%d+%.?%d*)kg%]") or "0"
-	local weight = tonumber(weightStr) or 0
+	-- No [<n>kg] token → weight is nil, NOT 0. Defaulting to 0 made every
+	-- malformed string "parse" successfully with a 0-value fruit, so sell
+	-- paths destroyed the item and paid nothing. Callers must nil-check.
+	local weightStr = remaining:match("%[(%d+%.?%d*)kg%]")
+	local weight = weightStr and tonumber(weightStr) or nil
 
 	local mutations = {}
 	for mutation in mutationStr:gmatch("[^,%s]+") do
@@ -38,7 +41,12 @@ local function parseFruitInfo(fruitName: string)
 		:gsub("^%[.-%]%s*", "")
 		:gsub("%[%d+%.?%d*kg%]%s*", "")
 
+	-- Empty name → nil, so `if fruitNameOnly then` guards actually fail
+	-- (empty string is truthy in Lua).
 	local fruitNameOnly = trim(nameCleaned)
+	if fruitNameOnly == "" then
+		fruitNameOnly = nil
+	end
 
 	return rarity, mutations, weight, fruitNameOnly
 end

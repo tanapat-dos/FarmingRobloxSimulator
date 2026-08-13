@@ -160,7 +160,7 @@ local function countMatchingFruits(player: Player, order): number
 	for _, value in data.Inventory do
 		if typeof(value) == "string" then
 			local rarity, _, weight, name = fruitNameParser(value)
-			if name == order.fruitName and weight > 0 and tierIndex(rarity) >= needTier then
+			if name == order.fruitName and weight and weight > 0 and tierIndex(rarity) >= needTier then
 				have += 1
 			end
 		end
@@ -244,7 +244,7 @@ local function deliver(player: Player, orderId: string)
 	for key, value in data.Inventory do
 		if typeof(value) == "string" then
 			local rarity, _, weight, name = fruitNameParser(value)
-			if name == order.fruitName and weight > 0 and tierIndex(rarity) >= needTier then
+			if name == order.fruitName and weight and weight > 0 and tierIndex(rarity) >= needTier then
 				table.insert(matching, { key = key, weight = weight })
 			end
 		end

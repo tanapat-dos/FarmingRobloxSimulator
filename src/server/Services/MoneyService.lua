@@ -175,10 +175,15 @@ end
 function Service.removeDiamonds(player: Player, amount: number): boolean
 	local DataService = cachedModules.Cache.DataService
 	local profileData = DataService.getData(player)
-	if typeof(amount) ~= "number" or amount <= 0 then
+	if typeof(amount) ~= "number" then
 		return false
 	end
+	-- Floor BEFORE the <= 0 check: a fractional amount like 0.5 must fail,
+	-- not "succeed" while deducting nothing.
 	amount = math.floor(amount)
+	if amount <= 0 then
+		return false
+	end
 	if profileData and (profileData.Diamonds or 0) >= amount then
 		profileData.Diamonds -= amount
 		Service.updateDiamondCount(player)
@@ -209,10 +214,11 @@ function Service.giveMoney(target: Player, amount: number)
 		local boostedAmount = math.floor(amount * Service.getCashMultiplier(target) + 0.5)
 		profileData.Cash += boostedAmount
 		Service.updateCashCount(target)
-		-- Track total earned for achievements (pre-boost base amount)
+		-- Track total earned for achievements (pre-boost base amount, so
+		-- boost multipliers don't inflate achievement pacing)
 		local achieveService = cachedModules.Cache.AchievementService
 		if achieveService and achieveService.addEarned then
-			task.defer(achieveService.addEarned, target, boostedAmount)
+			task.defer(achieveService.addEarned, target, math.floor(amount + 0.5))
 		end
 		return boostedAmount
 	end
@@ -223,10 +229,14 @@ function Service.removeCash(target: Player, amount: number): boolean
 	local DataService = cachedModules.Cache.DataService
 	local profileData = DataService.getData(target)
 
-	if typeof(amount) ~= "number" or amount <= 0 then
+	if typeof(amount) ~= "number" then
 		return false
 	end
+	-- Floor BEFORE the <= 0 check (see removeDiamonds).
 	amount = math.floor(amount)
+	if amount <= 0 then
+		return false
+	end
 
 	if profileData and profileData.Cash >= amount then
 		profileData.Cash -= amount

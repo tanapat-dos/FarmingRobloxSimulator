@@ -189,18 +189,20 @@ function Service.plantSeed(player: Player, seedName: string, location: CFrame, p
 	end
 end
 
-function Service.giveSeed(player:Player, seedName:string, amount:number)
+-- Returns true only when the seed was actually added. ProcessReceipt relies on
+-- this to avoid marking Robux receipts granted when the grant no-oped.
+function Service.giveSeed(player:Player, seedName:string, amount:number): boolean
 	local dataService = cachedModules.Cache.DataService
 	local inventoryService = cachedModules.Cache.InventoryService
 
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then
 		warn("❌ giveSeed received non-player argument:", player)
-		return
+		return false
 	end
 
-	if player:GetAttribute("DataLoaded") ~= true then return end
+	if player:GetAttribute("DataLoaded") ~= true then return false end
 	local playerData = dataService.getData(player)
-	if not playerData then return end
+	if not playerData then return false end
 
 	local inventory = playerData.Inventory
 	local foundSeed = inventory[seedName]
@@ -213,6 +215,7 @@ function Service.giveSeed(player:Player, seedName:string, amount:number)
 
 	-- ✅ Just pass the base name
 	inventoryService.inventoryUpdated(player, seedName)
+	return true
 end
 
 local function FormatTime(seconds)
@@ -391,8 +394,20 @@ function Service.init()
 		end)
 	end)
 
+	-- Rate limit: every BuyCrop hits MemoryStore (Get + Set). Without this a
+	-- spamming client can burn the experience's MemoryStore quota and take the
+	-- shop down for everyone.
+	local lastBuyAt: {[Player]: number} = {}
+	Players.PlayerRemoving:Connect(function(player)
+		lastBuyAt[player] = nil
+	end)
+
 	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName)
 		if player:GetAttribute("DataLoaded") ~= true then return end
+		if typeof(cropName) ~= "string" then return end
+		local now = os.clock()
+		if lastBuyAt[player] and now - lastBuyAt[player] < 0.5 then return end
+		lastBuyAt[player] = now
 		local stock = Service:GetCurrentStock()
 		if not stock then return end
 		local crop = stock[cropName]

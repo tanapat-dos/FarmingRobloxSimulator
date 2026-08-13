@@ -114,6 +114,11 @@ function Service.init()
 	local dataService = cachedModules.Cache.DataService
 	
 	remotes.Harvest.OnServerEvent:Connect(function(player: Player, plantKey: string, fruitNumber: string)
+		-- Reject non-string args: FindFirstChild errors on tables/Instances,
+		-- which would kill this event's thread with exploiter-controlled input.
+		if typeof(plantKey) ~= "string" or typeof(fruitNumber) ~= "string" then
+			return
+		end
 		local foundPlant = serverFolder:FindFirstChild(plantKey)
 		local seedData = seedDataModule.getData(plantKeyUtil.getSeedName(plantKey))
 		

@@ -377,7 +377,13 @@ function Service.rollEgg(player: Player, eggName: string)
 			return r
 		end
 	else
-		moneyService.removeCash(player, egg.cost)
+		-- Check the return: if a future yield sneaks in between hasEnoughCash
+		-- and here, a failed charge must not still grant a pet.
+		if not moneyService.removeCash(player, egg.cost) then
+			local r = { success = false, msg = "Not enough cash!" }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
+		end
 		eggStock.StockAmount -= 1
 		if IS_STUDIO then
 			studioStock = stock
@@ -492,6 +498,13 @@ function Service.init()
 		end
 	end)
 
+	-- Rate limit: rollEgg hits MemoryStore (Get + Set) on cash eggs. Without
+	-- this a spamming client can burn the MemoryStore quota for the server.
+	local lastRollAt: {[Player]: number} = {}
+	Players.PlayerRemoving:Connect(function(player)
+		lastRollAt[player] = nil
+	end)
+
 	remotes.PetRoll.OnServerEvent:Connect(function(player, eggName)
 		if player:GetAttribute("DataLoaded") ~= true then
 			return
@@ -499,6 +512,11 @@ function Service.init()
 		if typeof(eggName) ~= "string" then
 			return
 		end
+		local now = os.clock()
+		if lastRollAt[player] and now - lastRollAt[player] < 0.5 then
+			return
+		end
+		lastRollAt[player] = now
 		Service.rollEgg(player, eggName)
 	end)
 end

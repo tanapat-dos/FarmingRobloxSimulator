@@ -3,7 +3,11 @@ local Monetization = {}
 -- Developer Product IDs
 Monetization.DevProducts = {
 	RestockShop = 3308220846, -- 💰 Replace with your real ID
-	RestockTools = 3308220846, -- 💰 Replace with your real ID
+	-- RestockTools is not wired up anywhere yet. It previously shared
+	-- RestockShop's product ID, which would misroute a RestockTools purchase
+	-- to the seed-shop restock handler. Set to 0 (ignored) until it gets its
+	-- own real Developer Product ID AND a handler in ProductService.
+	RestockTools = 0,
 
 	-- Diamond packs (premium currency). Create these Developer Products in
 	-- Roblox (Creator Dashboard → your experience → Monetization → Developer
