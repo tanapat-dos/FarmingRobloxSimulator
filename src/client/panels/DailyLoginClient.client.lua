@@ -266,6 +266,14 @@ end
 local function applyDayCards(currentDay: number, alreadyClaimed: boolean)
 	for i, card in dayCards do
 		local label = card:FindFirstChild("DayNum")
+		-- Clear last render's highlight ring first: applyDayCards runs on
+		-- every state push, and unconditionally adding strokes stacked them
+		-- and left claimed cards permanently highlighted.
+		for _, child in card:GetChildren() do
+			if child:IsA("UIStroke") then
+				child:Destroy()
+			end
+		end
 		if i < currentDay or (alreadyClaimed and i == currentDay) then
 			-- past / already claimed
 			card.BackgroundColor3 = COLORS.cardClaimed

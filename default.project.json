@@ -112,36 +112,36 @@
         "$ignoreUnknownInstances": true,
 
         "UIEffects": {
-          "$path": "src/client/UIEffects.client.lua"
+          "$path": "src/client/hud/UIEffects.client.lua"
         },
 
         "ProximityPrompts": {
-          "$path": "src/client/ProximityPrompts.client.lua",
+          "$path": "src/client/world/ProximityPrompts.client.lua",
           "$ignoreUnknownInstances": true
         },
 
         "NPCHandler": {
-          "$path": "src/client/NPCHandler.client.lua"
+          "$path": "src/client/world/NPCHandler.client.lua"
         },
 
         "GetMouseCF": {
-          "$path": "src/client/GetMouseCF.client.lua"
+          "$path": "src/client/world/GetMouseCF.client.lua"
         },
 
         "ClientEffects": {
-          "$path": "src/client/ClientEffects.client.lua"
+          "$path": "src/client/world/ClientEffects.client.lua"
         },
 
         "OwnerIcon": {
-          "$path": "src/client/OwnerIcon.client.lua"
+          "$path": "src/client/hud/OwnerIcon.client.lua"
         },
 
         "FriendBoost": {
-          "$path": "src/client/FriendBoost.client.lua"
+          "$path": "src/client/hud/FriendBoost.client.lua"
         },
 
         "PetBoost": {
-          "$path": "src/client/PetBoost.client.lua"
+          "$path": "src/client/hud/PetBoost.client.lua"
         },
 
         "CmdrClient": {
@@ -151,72 +151,72 @@
         "CropReplicator": {
           "$className": "Folder",
           "Main": {
-            "$path": "src/client/CropReplicator/Main.client.lua"
+            "$path": "src/client/world/CropReplicator/Main.client.lua"
           }
         },
 
         "PetClient": {
-          "$path": "src/client/PetClient.client.lua"
+          "$path": "src/client/panels/PetClient.client.lua"
         },
 
         "PetRollAnimation": {
-          "$path": "src/client/PetRollAnimation.client.lua"
+          "$path": "src/client/panels/PetRollAnimation.client.lua"
         },
 
         "PetMenuClient": {
-          "$path": "src/client/PetMenuClient.client.lua"
+          "$path": "src/client/panels/PetMenuClient.client.lua"
         },
 
         "CropPriceLeaderboard": {
-          "$path": "src/client/CropPriceLeaderboard.client.lua"
+          "$path": "src/client/panels/CropPriceLeaderboard.client.lua"
         },
 
         "FruitToolDisplay": {
-          "$path": "src/client/FruitToolDisplay.client.lua"
+          "$path": "src/client/hud/FruitToolDisplay.client.lua"
         },
 
         "WeatherClient": {
-          "$path": "src/client/WeatherClient.client.lua"
+          "$path": "src/client/world/WeatherClient.client.lua"
         },
 
         "NavigationHudToggle": {
-          "$path": "src/client/NavigationHudToggle.client.lua"
+          "$path": "src/client/hud/NavigationHudToggle.client.lua"
         },
 
         "DayNightClient": {
-          "$path": "src/client/DayNightClient.client.lua"
+          "$path": "src/client/world/DayNightClient.client.lua"
         },
 
         "UITheme": {
-          "$path": "src/client/UITheme.client.lua"
+          "$path": "src/client/hud/UITheme.client.lua"
         },
 
         "OrderBoardClient": {
-          "$path": "src/client/OrderBoardClient.client.lua"
+          "$path": "src/client/panels/OrderBoardClient.client.lua"
         },
 
         "GardenUpgradeClient": {
-          "$path": "src/client/GardenUpgradeClient.client.lua"
+          "$path": "src/client/panels/GardenUpgradeClient.client.lua"
         },
 
         "LegendaryEggClient": {
-          "$path": "src/client/LegendaryEggClient.client.lua"
+          "$path": "src/client/panels/LegendaryEggClient.client.lua"
         },
 
         "DailyLoginClient": {
-          "$path": "src/client/DailyLoginClient.client.lua"
+          "$path": "src/client/panels/DailyLoginClient.client.lua"
         },
 
         "MenuBarClient": {
-          "$path": "src/client/MenuBarClient.client.lua"
+          "$path": "src/client/hud/MenuBarClient.client.lua"
         },
 
         "AchievementClient": {
-          "$path": "src/client/AchievementClient.client.lua"
+          "$path": "src/client/panels/AchievementClient.client.lua"
         },
 
         "Toasts": {
-          "$path": "src/client/Toasts.client.lua"
+          "$path": "src/client/hud/Toasts.client.lua"
         }
       }
     },
@@ -227,7 +227,7 @@
         "$className": "ScreenGui",
         "$ignoreUnknownInstances": true,
         "TeleportManager": {
-          "$path": "src/client/TeleportManager.client.lua"
+          "$path": "src/client/hud/TeleportManager.client.lua"
         }
       }
     },

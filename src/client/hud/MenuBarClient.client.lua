@@ -237,6 +237,16 @@ local function makeBar()
 				local pmGui = playerGui:FindFirstChild("AchievementGui")
 				if pmGui then
 					pmGui.Enabled = not pmGui.Enabled
+				else
+					-- First click: AchievementClient builds the gui (disabled)
+					-- only when the state response arrives — wait briefly and
+					-- open it, otherwise the first click does nothing.
+					task.spawn(function()
+						local built = playerGui:WaitForChild("AchievementGui", 3)
+						if built then
+							built.Enabled = true
+						end
+					end)
 				end
 				if notifDots["AchievementsBtn"] then
 					notifDots["AchievementsBtn"].Visible = false

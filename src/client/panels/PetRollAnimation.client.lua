@@ -409,21 +409,41 @@ local function playRollAnimation(result: { petName: string, eggName: string, boo
 		dismissed:Fire()
 	end)
 	dismissed.Event:Wait()
+	dismissed:Destroy()
 	closeOverlay()
+end
+
+-- Queue results instead of dropping them: a second roll bought during the
+-- animation is still granted server-side, so swallowing its result meant the
+-- player never saw the pet they paid for.
+local pendingResults = {}
+local drainRunning = false
+
+local function drainQueue()
+	if drainRunning then
+		return
+	end
+	drainRunning = true
+	task.spawn(function()
+		while #pendingResults > 0 do
+			local result = table.remove(pendingResults, 1)
+			local ok, err = pcall(playRollAnimation, result)
+			if not ok then
+				warn("[PetRollAnimation] Failed:", err)
+				isAnimating = false
+				animatingFlag.Value = false
+			end
+		end
+		drainRunning = false
+	end)
 end
 
 local petRollResult = remotes:WaitForChild("PetRollResult", 60)
 if petRollResult then
 	petRollResult.OnClientEvent:Connect(function(result)
 		if result.success and result.petName and result.eggName then
-			task.spawn(function()
-				local ok, err = pcall(playRollAnimation, result)
-				if not ok then
-					warn("[PetRollAnimation] Failed:", err)
-					isAnimating = false
-					animatingFlag.Value = false
-				end
-			end)
+			table.insert(pendingResults, result)
+			drainQueue()
 		end
 	end)
 end

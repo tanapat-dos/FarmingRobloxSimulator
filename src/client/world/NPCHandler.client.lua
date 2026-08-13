@@ -24,9 +24,12 @@ local function getTrackableNPCs()
 
 	local npcs = {}
 	for _, npc in pairs(characters:GetChildren()) do
-		local hrp = npc:WaitForChild("HumanoidRootPart")
-		local head = npc:WaitForChild("Head")
-		local neck = head and head:WaitForChild("Neck")
+		-- Timeouts matter: a timeout-less WaitForChild here hangs forever on
+		-- any NPC missing a part (e.g. R6 rigs keep Neck in Torso, not Head),
+		-- silently killing head-tracking for ALL NPCs.
+		local hrp = npc:WaitForChild("HumanoidRootPart", 5)
+		local head = npc:WaitForChild("Head", 5)
+		local neck = head and head:WaitForChild("Neck", 5)
 
 		if hrp and head and neck then
 			table.insert(npcs, {
@@ -50,7 +53,9 @@ RunService.RenderStepped:Connect(function()
 	local playerChar = LocalPlayer.Character
 	if not playerChar then return end
 
-	local playerHrp = playerChar:WaitForChild("HumanoidRootPart")
+	-- Never WaitForChild inside RenderStepped: during respawn each frame
+	-- would stack another yielded thread. Just skip frames until HRP exists.
+	local playerHrp = playerChar:FindFirstChild("HumanoidRootPart")
 	if not playerHrp then return end
 
 	for _, npc in pairs(npcs) do

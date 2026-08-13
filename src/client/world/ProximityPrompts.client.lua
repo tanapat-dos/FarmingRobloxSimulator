@@ -75,10 +75,26 @@ end
 
 
 --// Toggle Prompts
+-- Only re-enable prompts WE disabled. Blanket-enabling every prompt in
+-- workspace resurrected prompts other systems keep off on purpose (unripe
+-- HarvestPrompts from CropReplicator, other players' plots).
+local promptsWeDisabled: { ProximityPrompt } = {}
 local function toggleAllPrompts(enable)
-	for _, prompt in ipairs(workspace:GetDescendants()) do
-		if prompt:IsA("ProximityPrompt") then
-			prompt.Enabled = enable
+	if enable then
+		for _, prompt in ipairs(promptsWeDisabled) do
+			if prompt.Parent then
+				prompt.Enabled = true
+			end
+		end
+		table.clear(promptsWeDisabled)
+	else
+		-- Merge (don't clear): an overlapping disable must not forget
+		-- prompts the previous disable is still holding off.
+		for _, prompt in ipairs(workspace:GetDescendants()) do
+			if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+				prompt.Enabled = false
+				table.insert(promptsWeDisabled, prompt)
+			end
 		end
 	end
 end

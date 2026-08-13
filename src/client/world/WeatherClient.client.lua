@@ -328,7 +328,15 @@ local function setHud(weatherName: string)
 end
 
 -- ------------------------------------------------------------- apply state
+-- Both the WeatherChanged remote AND the workspace attribute fire for the
+-- same server transition; dedupe so we don't run the whole transition twice
+-- (double ambient sounds, restarted flashes).
+local currentWeather: string? = nil
 local function onWeatherChanged(weatherName: string)
+	if weatherName == currentWeather then
+		return
+	end
+	currentWeather = weatherName
 	stopFlashes()
 	EnvironmentLighting.lightningBoost = 0
 

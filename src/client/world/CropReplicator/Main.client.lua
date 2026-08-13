@@ -329,8 +329,16 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 
 	refresh()
 	growthPercentage.Changed:Connect(refresh)
-	player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
-	player:GetAttributeChangedSignal("UpgradeGrowthReduction"):Connect(refresh)
+
+	-- These signals live on the PLAYER, not the billboard: they must be
+	-- disconnected when the billboard dies or every planted crop leaks two
+	-- connections for the rest of the session.
+	local petConn = player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
+	local upgradeConn = player:GetAttributeChangedSignal("UpgradeGrowthReduction"):Connect(refresh)
+	billboard.Destroying:Connect(function()
+		petConn:Disconnect()
+		upgradeConn:Disconnect()
+	end)
 
 	task.spawn(function()
 		while billboard.Parent and growthPercentage.Value < 100 do
