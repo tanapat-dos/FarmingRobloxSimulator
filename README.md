@@ -2,54 +2,37 @@
 
 This project uses **Rojo** for live-sync between your `.lua` files and Roblox Studio.
 
+> 🤖 **Developing with an AI agent?** Read **[CLAUDE.md](CLAUDE.md)** first —
+> it's the full map: architecture rules, security conventions, .rbxl gotchas,
+> and workflows. `PROJECT.md` has the game-design overview.
+
 ## Project Structure
 
 ```
 FarmingRobloxSimulator/
-├── default.project.json      ← Rojo config
+├── default.project.json           ← Rojo config (file → instance mapping)
 ├── Latest Farming Simulator.rbxl  ← Roblox place file (open this in Studio)
+├── CLAUDE.md / AGENTS.md          ← AI development guide
+├── tools/                         ← One-off Studio command-bar scripts (not synced)
 └── src/
-    ├── server/
-    │   ├── Server.server.lua           ← Bootstrap all services
-    │   ├── Server/
-    │   │   └── CachedModules.lua       ← Shared service cache
-    │   └── Services/
-    │       ├── DataService/
-    │       │   ├── init.lua            ← Player data / profile management
-    │       │   └── Template.lua        ← Default player data template
-    │       ├── SeedShopService.lua     ← Shop stock, buying, planting seeds
-    │       ├── ProductService.lua      ← DevProduct purchase handling
-    │       ├── InventoryService/
-    │       │   ├── init.lua            ← Inventory management
-    │       │   ├── SeedActivator.lua   ← Activated when planting a seed tool
-    │       │   └── GearActivator.lua   ← Activated when using a gear tool
-    │       ├── HarvestService.lua      ← Handles fruit harvesting
-    │       ├── MutationService.lua     ← Plant mutation logic
-    │       ├── PlotService.lua         ← Player plot assignment & plant spawning
-    │       └── MoneyService.lua        ← Cash, selling fruits, friend boost
-    ├── client/
-    │   ├── UIEffects.client.lua        ← Click sounds, hover effects, cash HUD
-    │   ├── ProximityPrompts.client.lua ← Shop interactions, NPC dialogue, selling
-    │   ├── NPCHandler.client.lua       ← NPC head tracking
-    │   ├── GetMouseCF.client.lua       ← Mouse position remote
-    │   ├── ClientEffects.client.lua    ← Client-side visual effects
-    │   ├── OwnerIcon.client.lua        ← Plot owner avatar visibility
-    │   ├── FriendBoost.client.lua      ← Friend boost HUD label
-    │   ├── CmdrClient.client.lua       ← Admin command client (F4)
-    │   └── CropReplicator/
-    │       └── Main.client.lua         ← Plant growth visuals & harvest prompts
-    └── shared/
-        └── Modules/
-            ├── Monetization.lua        ← DevProduct/Gamepass IDs
-            ├── SeedRarity.lua          ← Rarity color definitions
-            ├── FruitNameParse.lua      ← Parse fruit name strings
-            ├── GetFruitValue.lua       ← Calculate fruit sell value
-            ├── ClientEffects/
-            │   └── PlantEffect.lua     ← Plant spawn visual effect
-            └── Mutations/
-                ├── Golden.lua          ← Golden mutation visual
-                └── Rainbow.lua         ← Rainbow mutation visual
+    ├── server/                    → ServerScriptService
+    │   ├── Server.server.lua      ← Bootstrap: requires + init()s all services
+    │   ├── Server/CachedModules.lua ← Service locator
+    │   └── Services/              ← One service per concern (Data, Plot, Shop,
+    │                                Inventory, Harvest, Money, Product, Pet,
+    │                                Weather, Order, Rebirth, Gear, …)
+    ├── client/                    → StarterPlayerScripts
+    │   ├── hud/                   ← Persistent HUD (menu bar, toasts, boosts, theme)
+    │   ├── panels/                ← Openable panels (pets, orders, achievements, …)
+    │   └── world/                 ← World-facing (crop visuals, prompts, NPCs, weather)
+    └── shared/Modules/            → ReplicatedStorage.Modules (both sides)
+                                     EconomyBalance (all tuning), fruit parsing,
+                                     rarity config, Mutations/
 ```
+
+The client subfolders are **disk organization only** — Rojo maps every script
+back to the same flat instance names in `StarterPlayerScripts`, so nothing in
+the place file changes.
 
 ## Scripts NOT managed by Rojo (stay in .rbxl)
 These are third-party or instance-data scripts that live only in the `.rbxl` file:
