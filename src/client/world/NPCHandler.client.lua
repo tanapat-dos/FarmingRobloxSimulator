@@ -71,12 +71,12 @@ RunService.RenderStepped:Connect(function()
 			local vecB = Vector2.new(hrp.CFrame.LookVector.X, hrp.CFrame.LookVector.Z)
 			local dot = vecA:Dot(vecB)
 			local cross = vecA.X * vecB.Y - vecA.Y * vecB.X
-			local yAngle = math.atan2(cross, dot)
+			local yAngle = math.atan(cross, dot)
 			yAngle = math.clamp(yAngle, -MAX_ANGLE, MAX_ANGLE)
 
 			local verticalOffset = playerHrp.Position.Y - head.Position.Y
 			local angleDistance = (playerHrp.Position - head.Position).Magnitude
-			local xAngle = math.atan2(verticalOffset, angleDistance)
+			local xAngle = math.atan(verticalOffset, angleDistance)
 
 			local targetC0 = originalC0 * CFrame.Angles(xAngle, yAngle, 0)
 			neck.C0 = neck.C0:Lerp(targetC0, SMOOTHING)

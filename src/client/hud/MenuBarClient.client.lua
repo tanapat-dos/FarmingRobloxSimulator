@@ -198,24 +198,40 @@ local function makeBar()
 			notifDots[def.name] = dot
 		end
 
+		-- Resolve a shop TPPart defensively: clicking during join (or with
+		-- streaming) must not error the whole click handler on a nil index.
+		local function getShopTP(shopName: string): BasePart?
+			local shops = workspace:FindFirstChild("Shops")
+			local shop = shops and shops:FindFirstChild(shopName)
+			local tp = shop and shop:FindFirstChild("TPPart")
+			return (tp and tp:IsA("BasePart")) and tp or nil
+		end
+
 		-- Wire click
 		btn.MouseButton1Click:Connect(function()
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
 			if def.name == "GardenTeleport" and hrp then
-				for _, plot in ipairs(workspace.Plots:GetChildren()) do
+				local plots = workspace:FindFirstChild("Plots")
+				for _, plot in ipairs(plots and plots:GetChildren() or {}) do
 					if plot:GetAttribute("USERID") == player.UserId then
-						hrp.CFrame = CFrame.new(plot.TPPart.Position + Vector3.new(0, 3, 0))
+						local tp = plot:FindFirstChild("TPPart")
+						if tp then
+							hrp.CFrame = CFrame.new(tp.Position + Vector3.new(0, 3, 0))
+						end
 						return
 					end
 				end
 			elseif def.name == "SeedsTeleport" and hrp then
-				hrp.CFrame = CFrame.new(workspace.Shops.SeedShop.TPPart.Position + Vector3.new(0, 3, 0))
+				local tp = getShopTP("SeedShop")
+				if tp then hrp.CFrame = CFrame.new(tp.Position + Vector3.new(0, 3, 0)) end
 			elseif def.name == "SellTeleport" and hrp then
-				hrp.CFrame = CFrame.new(workspace.Shops.SellStuff.TPPart.Position + Vector3.new(0, 3, 0))
+				local tp = getShopTP("SellStuff")
+				if tp then hrp.CFrame = CFrame.new(tp.Position + Vector3.new(0, 3, 0)) end
 			elseif def.name == "PetsTeleport" and hrp then
-				hrp.CFrame = CFrame.new(workspace.Shops.PetShop.TPPart.Position + Vector3.new(0, 3, 0))
+				local tp = getShopTP("PetShop")
+				if tp then hrp.CFrame = CFrame.new(tp.Position + Vector3.new(0, 3, 0)) end
 			elseif def.panel == "PetMenu" then
 				local petMenu = remotes:FindFirstChild("PetMenu")
 				if petMenu then

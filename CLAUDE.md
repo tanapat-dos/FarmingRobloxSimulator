@@ -143,8 +143,19 @@ carrot growthTime bug); `tools/RebalanceEconomy.lua` reads the live module.
 ## Workflows
 
 ```bash
+rokit install       # once: installs pinned rojo + selene + stylua (rokit.toml)
 rojo serve          # then connect the Rojo plugin in Studio
+selene src tools    # lint — treat ERRORS as blockers (warnings are legacy debt)
+stylua <file>       # format files you create/rewrite; don't mass-reformat
 ```
+
+**CI**: the workflow lives at `.github/ci.yml.pending` — it could not be pushed
+to `.github/workflows/` because the repo's access token lacks the `workflow`
+scope. **To activate:** move it to `.github/workflows/ci.yml` (GitHub web UI, or
+push with a `workflow`-scoped token). It runs on every push/PR: `rojo build`
+from source is the hard gate (broken project.json, missing files, unparsable
+sources); selene runs as an advisory job until legacy warnings are cleaned up.
+Once active: after pushing, check that CI is green.
 Open `Latest Farming Simulator.rbxl` FIRST, then serve/connect (Rojo needs the
 existing instances). Play-test in Studio (F5). Studio mode = mock data: fresh
 profile every run, instant in-memory shop stock, no MemoryStore/MessagingService.
@@ -160,13 +171,15 @@ profile every run, instant in-memory shop stock, no MemoryStore/MessagingService
 ## Known debt / watch-outs (as of 2026-08)
 
 - `Mutations/Golden|Rainbow.lua` depend on baked `script.Part` children in the
-  .rbxl (Wet/Shocked build effects procedurally — prefer that for new ones).
-- Shop stock read-modify-write over MemoryStore is not atomic across servers;
-  simultaneous cross-server buys can oversell (accepted for now).
-- `CropReplicator` growth-update visuals iterate all model descendants per
-  growth tick; heavy on huge farms.
-- Deprecated APIs still in use in places: `SetPrimaryPartCFrame`, `math.atan2`,
-  `Instance.new(class, parent)` — use `PivotTo`, `math.atan(y, x)`, and
-  set-then-parent in new code.
+  .rbxl (they degrade gracefully if missing, but Wet/Shocked build effects
+  procedurally — prefer that pattern for new mutations).
+- Stock adjustments go through `TryAdjustStock` (MemoryStore `UpdateAsync`,
+  atomic). Never revert to Get → mutate → Set for stock decrements.
 - `GetMouseCF` RemoteFunction is client-served; treat every consumer like #2
   above.
+- Baseline (non-mutated) crop ROI is ~break-even by design intent question:
+  comments in EconomyBalance promise tier-progression ROI, but nearly all
+  profit comes from mutation RNG. Retuning baseValue/price ratios is an open
+  design decision — don't change unilaterally.
+- Selene reports legacy warnings across the codebase; clean them
+  opportunistically, then make the CI lint job blocking.

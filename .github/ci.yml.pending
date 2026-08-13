@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    name: Rojo project validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain (rokit.toml)
+        uses: CompeyDev/setup-rokit@v0.2.1
+
+      # Hard gate: fails on broken default.project.json, missing $path files,
+      # and malformed source files. This is the regression net for file moves.
+      - name: Build place from source
+        run: rojo build default.project.json --output /tmp/build-check.rbxlx
+
+      - name: Generate sourcemap
+        run: rojo sourcemap default.project.json --output sourcemap.json
+
+  lint:
+    name: Selene lint (advisory)
+    runs-on: ubuntu-latest
+    # Advisory while pre-existing warnings are being cleaned up; parse errors
+    # still show up loudly in the job log. Remove continue-on-error once the
+    # codebase is warning-clean to make lint a hard gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain (rokit.toml)
+        uses: CompeyDev/setup-rokit@v0.2.1
+
+      - name: Lint src/
+        run: selene src tools

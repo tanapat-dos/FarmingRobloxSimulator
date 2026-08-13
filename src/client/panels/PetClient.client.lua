@@ -235,8 +235,3 @@ if petRollResult then
 	end)
 end
 
-player.CharacterAdded:Connect(function()
-	if activePetModel then
-		task.wait(0.5)
-	end
-end)

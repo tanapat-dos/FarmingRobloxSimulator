@@ -183,19 +183,31 @@ local function highlightModel(model)
 	activeUI.Highlight = hl
 end
 
+-- The harvest Highlight is a baked child of this script in the .rbxl
+-- ($ignoreUnknownInstances). Fall back to a procedural one so a source-only
+-- Rojo build doesn't error on the first HarvestPrompt shown.
+local harvestHighlight: Highlight = script:FindFirstChild("Highlight")
+if not harvestHighlight then
+	harvestHighlight = Instance.new("Highlight")
+	harvestHighlight.Name = "Highlight"
+	harvestHighlight.FillTransparency = 0.75
+	harvestHighlight.OutlineTransparency = 0
+	harvestHighlight.Parent = script
+end
+
 ProximityPromptService.PromptShown:Connect(function(prompt)
 	local model = prompt.Parent.Parent
 	if model and model:IsA("Model") then
 		highlightModel(model)
 	end
-	
+
 	if prompt.Name == "HarvestPrompt" then
 		local correspondingModel: ObjectValue = prompt:FindFirstChild("CorrespondingAdornee")
 		if correspondingModel then
-			script.Highlight.Adornee = correspondingModel.Value
+			harvestHighlight.Adornee = correspondingModel.Value
 		end
 	end
-	
+
 end)
 
 ProximityPromptService.PromptHidden:Connect(function(prompt)
@@ -203,11 +215,11 @@ ProximityPromptService.PromptHidden:Connect(function(prompt)
 		activeUI.Highlight:Destroy()
 		activeUI.Highlight = nil
 	end
-	
+
 	if prompt.Name == "HarvestPrompt" then
-		script.Highlight.Adornee = nil
+		harvestHighlight.Adornee = nil
 	end
-	
+
 end)
 
 --// Shop GUI

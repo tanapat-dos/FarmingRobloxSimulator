@@ -105,7 +105,7 @@ function CropSellPriceBoard.getSignCFrame(signPosition: Vector3, viewTarget: Vec
 	else
 		direction = direction.Unit
 	end
-	local yaw = math.atan2(direction.X, direction.Z)
+	local yaw = math.atan(direction.X, direction.Z)
 	return CFrame.new(signPosition) * CFrame.Angles(0, yaw, 0)
 end
 
@@ -219,7 +219,9 @@ function CropSellPriceBoard.populateSignGui(signPart: BasePart, entries: { Leade
 	header.BackgroundColor3 = Color3.fromRGB(18, 28, 18)
 	header.BorderSizePixel = 0
 	header.Parent = root
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0.08, 0)
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0.08, 0)
+	headerCorner.Parent = header
 
 	for index, column in CropSellPriceBoard.COLUMNS do
 		createLabel(
@@ -290,7 +292,9 @@ function CropSellPriceBoard.renderSignRows(scrollFrame: ScrollingFrame, entries:
 		row.BorderSizePixel = 0
 		row.LayoutOrder = entry.LayoutOrder
 		row.Parent = scrollFrame
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0.12, 0)
+		local rowCorner = Instance.new("UICorner")
+		rowCorner.CornerRadius = UDim.new(0.12, 0)
+		rowCorner.Parent = row
 
 		local hasPlayer = entry.PlayerName ~= EMPTY_PLAYER
 		local values = {
@@ -348,7 +352,9 @@ function CropSellPriceBoard.renderRows(scrollFrame: ScrollingFrame, entries: { L
 		row.BorderSizePixel = 0
 		row.LayoutOrder = entry.LayoutOrder
 		row.Parent = scrollFrame
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+		local rowCorner = Instance.new("UICorner")
+		rowCorner.CornerRadius = UDim.new(0, 6)
+		rowCorner.Parent = row
 
 		local hasPlayer = entry.PlayerName ~= EMPTY_PLAYER
 		local values = {

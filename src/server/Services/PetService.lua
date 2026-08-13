@@ -90,6 +90,38 @@ function Service:GetCurrentStock()
 	return nil
 end
 
+-- Atomically adjust one egg's StockAmount (see SeedShopService:TryAdjustStock
+-- — same pattern: UpdateAsync so concurrent cross-server rolls can't oversell).
+function Service:TryAdjustStock(eggName: string, delta: number): boolean
+	if IS_STUDIO then
+		local crop = studioStock and studioStock[eggName]
+		if not crop or crop.StockAmount + delta < 0 then
+			return false
+		end
+		crop.StockAmount += delta
+		return true
+	end
+	local memoryStore = MemoryStoreService:GetSortedMap("GLOBAL_SHOP")
+	local applied = false
+	local ok = pcall(function()
+		memoryStore:UpdateAsync(stockMemoryKey, function(raw)
+			applied = false
+			if typeof(raw) ~= "string" then
+				return nil
+			end
+			local decoded = HttpService:JSONDecode(raw)
+			local egg = decoded and decoded[eggName]
+			if not egg or egg.StockAmount + delta < 0 then
+				return nil
+			end
+			egg.StockAmount += delta
+			applied = true
+			return HttpService:JSONEncode(decoded)
+		end, 360)
+	end)
+	return ok and applied
+end
+
 function Service:SaveStockToMemoryStore(stockData)
 	if IS_STUDIO then
 		return
@@ -377,18 +409,18 @@ function Service.rollEgg(player: Player, eggName: string)
 			return r
 		end
 	else
-		-- Check the return: if a future yield sneaks in between hasEnoughCash
-		-- and here, a failed charge must not still grant a pet.
-		if not moneyService.removeCash(player, egg.cost) then
-			local r = { success = false, msg = "Not enough cash!" }
+		-- Reserve the egg atomically BEFORE charging (cross-server safe),
+		-- then charge; on a failed charge return the reserved unit.
+		if not Service:TryAdjustStock(eggName, -1) then
+			local r = { success = false, msg = "This egg is out of stock!" }
 			remotes.PetRollResult:FireClient(player, r)
 			return r
 		end
-		eggStock.StockAmount -= 1
-		if IS_STUDIO then
-			studioStock = stock
-		else
-			Service:SaveStockToMemoryStore(stock)
+		if not moneyService.removeCash(player, egg.cost) then
+			Service:TryAdjustStock(eggName, 1)
+			local r = { success = false, msg = "Not enough cash!" }
+			remotes.PetRollResult:FireClient(player, r)
+			return r
 		end
 	end
 
