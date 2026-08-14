@@ -13,7 +13,11 @@ local function updateAvatarVisibility()
 
 	local playerPosition = character.PrimaryPart.Position
 
-	for _, plot in ipairs(workspace.Plots:GetChildren()) do
+	local plots = workspace:FindFirstChild("Plots")
+	if not plots then
+		return
+	end
+	for _, plot in ipairs(plots:GetChildren()) do
 		local ownerTag = plot:FindFirstChild("Owner_Tag")
 		if ownerTag and ownerTag:IsDescendantOf(workspace) then
 			local billboardGui = ownerTag:FindFirstChild("AvatarGui")
@@ -36,4 +40,13 @@ local function updateAvatarVisibility()
 end
 
 
-RunService.RenderStepped:Connect(updateAvatarVisibility)
+-- 5 Hz is visually indistinguishable for a show/hide-at-distance check and
+-- avoids walking every plot's children each rendered frame.
+local accumulator = 0
+RunService.Heartbeat:Connect(function(dt)
+	accumulator += dt
+	if accumulator >= 0.2 then
+		accumulator = 0
+		updateAvatarVisibility()
+	end
+end)

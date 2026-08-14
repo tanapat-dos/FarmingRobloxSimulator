@@ -93,10 +93,26 @@ end
 
 
 --// Toggle Prompts
+-- Only re-enable prompts WE disabled. Blanket-enabling every prompt in
+-- workspace resurrected prompts other systems keep off on purpose (unripe
+-- HarvestPrompts from CropReplicator, other players' plots).
+local promptsWeDisabled: { ProximityPrompt } = {}
 local function toggleAllPrompts(enable)
-	for _, prompt in ipairs(workspace:GetDescendants()) do
-		if prompt:IsA("ProximityPrompt") then
-			prompt.Enabled = enable
+	if enable then
+		for _, prompt in ipairs(promptsWeDisabled) do
+			if prompt.Parent then
+				prompt.Enabled = true
+			end
+		end
+		table.clear(promptsWeDisabled)
+	else
+		-- Merge (don't clear): an overlapping disable must not forget
+		-- prompts the previous disable is still holding off.
+		for _, prompt in ipairs(workspace:GetDescendants()) do
+			if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+				prompt.Enabled = false
+				table.insert(promptsWeDisabled, prompt)
+			end
 		end
 	end
 end
@@ -185,19 +201,31 @@ local function highlightModel(model)
 	activeUI.Highlight = hl
 end
 
+-- The harvest Highlight is a baked child of this script in the .rbxl
+-- ($ignoreUnknownInstances). Fall back to a procedural one so a source-only
+-- Rojo build doesn't error on the first HarvestPrompt shown.
+local harvestHighlight: Highlight = script:FindFirstChild("Highlight")
+if not harvestHighlight then
+	harvestHighlight = Instance.new("Highlight")
+	harvestHighlight.Name = "Highlight"
+	harvestHighlight.FillTransparency = 0.75
+	harvestHighlight.OutlineTransparency = 0
+	harvestHighlight.Parent = script
+end
+
 ProximityPromptService.PromptShown:Connect(function(prompt)
 	local model = prompt.Parent.Parent
 	if model and model:IsA("Model") then
 		highlightModel(model)
 	end
-	
+
 	if prompt.Name == "HarvestPrompt" then
 		local correspondingModel: ObjectValue = prompt:FindFirstChild("CorrespondingAdornee")
 		if correspondingModel then
-			script.Highlight.Adornee = correspondingModel.Value
+			harvestHighlight.Adornee = correspondingModel.Value
 		end
 	end
-	
+
 end)
 
 ProximityPromptService.PromptHidden:Connect(function(prompt)
@@ -205,11 +233,11 @@ ProximityPromptService.PromptHidden:Connect(function(prompt)
 		activeUI.Highlight:Destroy()
 		activeUI.Highlight = nil
 	end
-	
+
 	if prompt.Name == "HarvestPrompt" then
-		script.Highlight.Adornee = nil
+		harvestHighlight.Adornee = nil
 	end
-	
+
 end)
 
 --// Shop GUI

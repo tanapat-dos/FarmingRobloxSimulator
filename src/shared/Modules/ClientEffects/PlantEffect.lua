@@ -11,7 +11,7 @@ return function(Data)
 	local clone = plantEffect:Clone()
 	
 	clone.PrimaryPart.Anchored = true
-	clone:SetPrimaryPartCFrame(CFrame.new(location.Position)*CFrame.fromEulerAngles(0,0,math.rad(90)))
+	clone:PivotTo(CFrame.new(location.Position)*CFrame.fromEulerAngles(0,0,math.rad(90)))
 	clone.Parent = workspace.World.Visuals
 	
 	local scaleValue = Instance.new("NumberValue")

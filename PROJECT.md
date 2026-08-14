@@ -58,9 +58,13 @@
 ```
 src/
 ├── server/          → ServerScriptService
-├── client/          → StarterPlayerScripts
+├── client/          → StarterPlayerScripts (hud/ panels/ world/ on disk;
+│                       flattened to the same instance names by Rojo)
 └── shared/Modules/  → ReplicatedStorage.Modules
 ```
+
+See **CLAUDE.md** for the full architecture guide (service pattern, remote
+flow, .rbxl-only instances, security conventions).
 
 Open `Latest Farming Simulator.rbxl` in Studio. Run `rojo serve` and connect the Rojo plugin for live sync.
 
@@ -90,25 +94,27 @@ Never let the client set cash, inventory, or ownership directly.
 
 # Current Features
 
-- Personal plots with plant growth
-- Seed shop with restock timer
-- Sell shop (single item, bulk, price check)
-- Crop mutations (Golden, Rainbow)
-- Friend boost on earnings
-- Pet gacha (5 egg tiers) with equip and cash boost
-- Physical pet shop + NPC + HUD teleport
+- Personal plots with plant growth + bed progression (1 → 6 beds)
+- Seed shop with global restock timer (MemoryStore-shared stock)
+- Sell shop (single item, bulk, price check) + crop sell price board/leaderboard
+- Crop mutations: Golden/Rainbow (plant-time), Wet/Shocked (weather)
+- Weather system (Sunny/Rain/Thunderstorm) + day/night cycle
+- Friend boost, pet boost, rebirth boost on earnings
+- Pet gacha (5 egg tiers incl. premium Divine/diamonds) with equip + boosts
+- NPC order board (deliver-N-crops at a premium)
+- Rebirth prestige loop, consumable gear (Fertilizer, Mutation Spray)
+- Daily login rewards, achievements
+- Diamonds premium currency + dev-product purchases
 
 ---
 
 # Future Features
 
 - Seasons
-- Weather system
 - Trading between players
 - Quests
-- Prestige
-- Daily rewards
 - Live events
+- Fishing (branches exist: fishing-system, fishing-revamp)
 
 ---
 

@@ -30,11 +30,15 @@ return function(fruitData: any)
 	if seedData and mutations and weight and fruitName then
 		local baseValue = seedData.BaseValue.Value
 
+		-- Take the BEST matching growth mutation. Iterating a hash map and
+		-- overwriting on every match made the multiplier depend on
+		-- nondeterministic dictionary order if a fruit ever carried both
+		-- Golden and Rainbow.
 		local growthMutationMultiplier: number = growthMutations.None
 		if #mutations > 0 then
-			for mut: string, number: number in growthMutations do
+			for mut: string, multiplier: number in growthMutations do
 				if table.find(mutations, mut) then
-					growthMutationMultiplier = number
+					growthMutationMultiplier = math.max(growthMutationMultiplier, multiplier)
 				end
 			end
 		end

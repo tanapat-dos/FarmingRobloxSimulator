@@ -26,7 +26,18 @@ for _,v in modules.Mutations:GetChildren() do
 	end
 end
 
-repeat task.wait() until player:GetAttribute("DataLoaded") == true
+-- Wait for data load, but tell someone if it never happens (a data-load
+-- failure used to leave the whole crop replicator silently dead).
+do
+	local waited = 0
+	while player:GetAttribute("DataLoaded") ~= true do
+		waited += task.wait()
+		if waited > 30 then
+			warn("[CropReplicator] DataLoaded still false after 30s — waiting on player data")
+			waited = -math.huge -- warn once, keep waiting
+		end
+	end
+end
 
 task.wait(1)
 
@@ -104,37 +115,60 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 			-- Enable prompt
 			task.spawn(function()
 				if multiHarvest then
-					serverModel.FruitPrompts[fruitNumber].HarvestPrompt.Enabled = true
-					
+					-- Guard the replication race: on join, CanHarvest can
+					-- replicate before FruitPrompts/its children — direct
+					-- indexing errored the thread and the fruit stayed
+					-- un-harvestable until replant.
+					local fruitPrompts = serverModel:WaitForChild("FruitPrompts", 10)
+					local promptPart = fruitPrompts and fruitPrompts:WaitForChild(fruitNumber, 10)
+					local harvestPrompt = promptPart and promptPart:WaitForChild("HarvestPrompt", 10)
+					local serverConfig = serverModel:FindFirstChild("ServerConfiguration")
+					local fruitConfig = serverConfig
+						and serverConfig:FindFirstChild("Fruits")
+						and serverConfig.Fruits:FindFirstChild(fruitNumber)
+					if not (harvestPrompt and fruitConfig) then
+						warn("[CropReplicator] Fruit instances never replicated for", serverModel.Name, fruitNumber)
+						return
+					end
+					harvestPrompt.Enabled = true
+
 					if not clientModel:FindFirstChild("fruit_"..fruitNumber) then
 						local clone = assets.Plants[plantName].ClientModel["fruit_"..fruitNumber]:Clone()
-						clone:SetPrimaryPartCFrame(serverModel.FruitPrompts[fruitNumber].CFrame)
+						clone:PivotTo(promptPart.CFrame)
 						clone:ScaleTo(getFruitVisualScale(plantName, serverModel, sizeScaling))
 						clone.Parent = clientModel
 
 						-- Mutations.Changed is wired once per fruit in childAdded;
 						-- reconnecting here leaked a connection every regrow cycle.
-						mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.FruitPrompts[fruitNumber])
+						mutationsChanged(clientModel, fruitConfig.Mutations.Value, seed_data, promptPart)
 
 						syncHarvestRarity(serverModel, clientModel, fruitNumber, true)
 
 						local objectValue = Instance.new("ObjectValue")
 						objectValue.Name = "CorrespondingAdornee"
 						objectValue.Value = clone
-						objectValue.Parent = serverModel.FruitPrompts:WaitForChild(tostring(fruitNumber)).HarvestPrompt
+						objectValue.Parent = harvestPrompt
 					else
 						syncHarvestRarity(serverModel, clientModel, fruitNumber, true)
 					end
 				else
 					local harvestHost = serverModel:FindFirstChild("HarvestAnchor") or serverModel.PrimaryPart
-					local harvestPrompt = harvestHost:WaitForChild("HarvestPrompt")
+					local harvestPrompt = harvestHost and harvestHost:WaitForChild("HarvestPrompt", 10)
+					local serverConfig = serverModel:FindFirstChild("ServerConfiguration")
+					local fruitConfig = serverConfig
+						and serverConfig:FindFirstChild("Fruits")
+						and serverConfig.Fruits:FindFirstChild(fruitNumber)
+					if not (harvestPrompt and fruitConfig) then
+						warn("[CropReplicator] Harvest instances never replicated for", serverModel.Name)
+						return
+					end
 					local objectValue = Instance.new("ObjectValue")
 					objectValue.Name = "CorrespondingAdornee"
 					objectValue.Value = clientModel
 					objectValue.Parent = harvestPrompt
 					harvestPrompt.Enabled = true
 
-					mutationsChanged(clientModel,serverModel.ServerConfiguration.Fruits[fruitNumber].Mutations.Value,seed_data, serverModel.PrimaryPart)
+					mutationsChanged(clientModel, fruitConfig.Mutations.Value, seed_data, serverModel.PrimaryPart)
 					syncHarvestRarity(serverModel, clientModel, fruitNumber, false)
 				end
 			end)
@@ -143,10 +177,15 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 			-- disable prompt
 			task.spawn(function()
 				if multiHarvest then
-					serverModel.FruitPrompts[fruitNumber].HarvestPrompt.Enabled = false
-					local foundObjectValue = serverModel.FruitPrompts[fruitNumber].HarvestPrompt:FindFirstChildWhichIsA("ObjectValue")
-					if foundObjectValue then
-						foundObjectValue:Destroy()
+					local fruitPrompts = serverModel:FindFirstChild("FruitPrompts")
+					local promptPart = fruitPrompts and fruitPrompts:FindFirstChild(fruitNumber)
+					local harvestPrompt = promptPart and promptPart:FindFirstChild("HarvestPrompt")
+					if harvestPrompt then
+						harvestPrompt.Enabled = false
+						local foundObjectValue = harvestPrompt:FindFirstChildWhichIsA("ObjectValue")
+						if foundObjectValue then
+							foundObjectValue:Destroy()
+						end
 					end
 					
 					local foundFruitModel = clientModel:FindFirstChild("fruit_"..fruitNumber)
@@ -157,7 +196,7 @@ local function harvestableChanged(plantName: string, serverModel:Model, clientMo
 				else
 					clearHarvestRarity(clientModel, fruitNumber, false)
 					local harvestHost = serverModel:FindFirstChild("HarvestAnchor") or serverModel.PrimaryPart
-					local harvestPrompt = harvestHost:FindFirstChild("HarvestPrompt")
+					local harvestPrompt = harvestHost and harvestHost:FindFirstChild("HarvestPrompt")
 					if harvestPrompt then
 						harvestPrompt.Enabled = false
 					end
@@ -204,49 +243,75 @@ local function growthCelebration(clientModel: Model)
 	end)
 end
 
-local function growthPercentageUpdated(clientModel: Model, newValue: number)
-	task.spawn(function()
-		for _,v in clientModel:GetDescendants() do
-			local isTweened = v:GetAttribute("IsTweened")
-			local originalSize = v:GetAttribute("OriginalSize")
-			local appearPercentage = v:GetAttribute("AppearPercentage")
-			local originalCFrame = v:GetAttribute("OriginalCFrame")
-			local hideAtPercentage = v:GetAttribute("HideAtPercentage")
+-- Coalesce growth updates per plant: the server ticks GrowthPercentage
+-- continuously, and the old version spawned a full descendant sweep (with a
+-- 0.05s wait per descendant and a nested thread each) for EVERY tick —
+-- overlapping sweeps piled up into a task storm on big farms. Now at most one
+-- sweep runs per plant, and it re-runs once with the latest value if ticks
+-- arrived while it was busy. Weak keys so destroyed models don't leak state.
+local growthUpdateState = setmetatable({}, { __mode = "k" })
 
-			task.spawn(function()
-				if not v:IsA("BasePart") then
-					return
-				end
-				if isTweened ~= nil and originalSize and appearPercentage ~= nil then
-					-- Stage-transition crops: hide this stage once the next one should appear
-					if hideAtPercentage and newValue >= hideAtPercentage then
-						v.Transparency = 1
-						v.Size = Vector3.new(0.01, 0.01, 0.01)
-						v:SetAttribute("IsTweened", false)
-					elseif isTweened == false then
-						if newValue >= appearPercentage then
-							v:SetAttribute("IsTweened", true)
-							tweenService:Create(v, TweenInfo.new(1,Enum.EasingStyle.Back,Enum.EasingDirection.Out),
-								{
-									Size = originalSize,
-									["CFrame"] = originalCFrame,
-									Transparency = 0
-								}
-							):Play()
-						end
-					end
-				end
-			end)
-			task.wait(0.05)
-		end
+local function applyGrowthVisuals(clientModel: Model, newValue: number)
+	for i, v in clientModel:GetDescendants() do
+		local isTweened = v:GetAttribute("IsTweened")
+		local originalSize = v:GetAttribute("OriginalSize")
+		local appearPercentage = v:GetAttribute("AppearPercentage")
+		local originalCFrame = v:GetAttribute("OriginalCFrame")
+		local hideAtPercentage = v:GetAttribute("HideAtPercentage")
 
-		if newValue >= 100 then
-			if clientModel:GetAttribute("FullyGrown") ~= true then
-				clientModel:SetAttribute("FullyGrown", true)
-				growthCelebration(clientModel)
+		if isTweened ~= nil and originalSize and appearPercentage ~= nil then
+			-- Stage-transition crops: hide this stage once the next one should appear
+			if hideAtPercentage and newValue >= hideAtPercentage then
+				if isTweened == true then
+					v.Transparency = 1
+					v.Size = Vector3.new(0.01, 0.01, 0.01)
+					v:SetAttribute("IsTweened", false)
+				end
+			elseif isTweened == false then
+				if newValue >= appearPercentage then
+					v:SetAttribute("IsTweened", true)
+					tweenService:Create(v, TweenInfo.new(1,Enum.EasingStyle.Back,Enum.EasingDirection.Out),
+						{
+							Size = originalSize,
+							["CFrame"] = originalCFrame,
+							Transparency = 0
+						}
+					):Play()
+				end
 			end
 		end
 
+		if i % 20 == 0 then
+			task.wait() -- yield periodically instead of 0.05s per descendant
+		end
+	end
+
+	if newValue >= 100 then
+		if clientModel:GetAttribute("FullyGrown") ~= true then
+			clientModel:SetAttribute("FullyGrown", true)
+			growthCelebration(clientModel)
+		end
+	end
+end
+
+local function growthPercentageUpdated(clientModel: Model, newValue: number)
+	local state = growthUpdateState[clientModel]
+	if not state then
+		state = { running = false, pending = nil }
+		growthUpdateState[clientModel] = state
+	end
+	state.pending = newValue
+	if state.running then
+		return
+	end
+	state.running = true
+	task.spawn(function()
+		while state.pending ~= nil and clientModel.Parent do
+			local value = state.pending
+			state.pending = nil
+			applyGrowthVisuals(clientModel, value)
+		end
+		state.running = false
 	end)
 end
 
@@ -339,8 +404,16 @@ local function setupGrowthTimer(clientModel: Model, serverModel: Model, seed_dat
 
 	refresh()
 	growthPercentage.Changed:Connect(refresh)
-	player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
-	player:GetAttributeChangedSignal("UpgradeGrowthReduction"):Connect(refresh)
+
+	-- These signals live on the PLAYER, not the billboard: they must be
+	-- disconnected when the billboard dies or every planted crop leaks two
+	-- connections for the rest of the session.
+	local petConn = player:GetAttributeChangedSignal("PetGrowthReduction"):Connect(refresh)
+	local upgradeConn = player:GetAttributeChangedSignal("UpgradeGrowthReduction"):Connect(refresh)
+	billboard.Destroying:Connect(function()
+		petConn:Disconnect()
+		upgradeConn:Disconnect()
+	end)
 
 	task.spawn(function()
 		while billboard.Parent and growthPercentage.Value < 100 do

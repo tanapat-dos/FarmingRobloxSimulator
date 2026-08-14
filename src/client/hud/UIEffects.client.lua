@@ -58,32 +58,33 @@ local function applyHoverEffect(button)
 	local bounceTimer = 0
 	local connection
 
+	-- ONE camera reused for this viewport. The old version created (and
+	-- garbage-created) a new Camera instance every rendered frame while
+	-- hovering, and a re-entry before MouseLeave orphaned the previous
+	-- RenderStepped connection permanently.
+	local cam = Instance.new("Camera")
+	cam.Name = "ViewportCamera"
+	cam.CFrame = defaultCameraCFrame
+	cam.Parent = viewportFrame
+	viewportFrame.CurrentCamera = cam
+
 	button.MouseEnter:Connect(function()
+		if connection then
+			return -- already hovering; don't stack a second loop
+		end
 
 		connection = RunService.RenderStepped:Connect(function(dt)
 			bounceTimer += dt * 6
-			
+
 			local offsetZ = math.sin(bounceTimer) * 0.1
-			
+
 			local angleX = math.sin(bounceTimer * 1.2) * math.rad(1.5)
 			local angleY = math.cos(bounceTimer * 1.5) * math.rad(1.5)
-		
-			local camPos = baseCenter + Vector3.new(0, 0, closerZoom + offsetZ)
-			local lookVector = (baseCenter - camPos).Unit
 
+			local camPos = baseCenter + Vector3.new(0, 0, closerZoom + offsetZ)
 			local jiggleRotation = CFrame.Angles(angleX, angleY, 0)
 
-			local cam = Instance.new("Camera")
-			cam.Name = "ViewportCamera"
 			cam.CFrame = CFrame.new(camPos, baseCenter) * jiggleRotation
-			cam.Parent = viewportFrame
-			viewportFrame.CurrentCamera = cam
-
-			for _, obj in ipairs(viewportFrame:GetChildren()) do
-				if obj:IsA("Camera") and obj ~= cam then
-					obj:Destroy()
-				end
-			end
 		end)
 	end)
 
@@ -92,18 +93,7 @@ local function applyHoverEffect(button)
 			connection:Disconnect()
 			connection = nil
 		end
-
-		local cam = Instance.new("Camera")
-		cam.Name = "ViewportCamera"
 		cam.CFrame = defaultCameraCFrame
-		cam.Parent = viewportFrame
-		viewportFrame.CurrentCamera = cam
-
-		for _, obj in ipairs(viewportFrame:GetChildren()) do
-			if obj:IsA("Camera") and obj ~= cam then
-				obj:Destroy()
-			end
-		end
 	end)
 end
 

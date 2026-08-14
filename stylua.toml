@@ -1,0 +1,7 @@
+# StyLua config matching the existing codebase style.
+# The repo is NOT mass-formatted — format files you create or substantially
+# rewrite (`stylua <file>`), don't reformat untouched legacy files.
+indent_type = "Tabs"
+indent_width = 4
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always"

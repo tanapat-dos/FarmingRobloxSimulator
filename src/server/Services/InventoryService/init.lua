@@ -155,8 +155,12 @@ function Service.removeItem(player:Player, itemName: string, count:number)
 						end
 					end
 
-					local tool = player.Character:FindFirstChildWhichIsA("Tool")
-					
+					-- Character can be nil (dead / mid-respawn). Erroring here
+					-- would abort callers AFTER the inventory entry was already
+					-- deleted (e.g. OrderService.deliver consuming fruit unpaid).
+					local character = player.Character
+					local tool = character and character:FindFirstChildWhichIsA("Tool")
+
 					if tool then
 						if isSeed and tool:GetAttribute("isSeed") == true and tool:GetAttribute("Name") == itemName then
 							tool:Destroy()
@@ -249,7 +253,7 @@ function Service.createNewTool(player: Player, toolName: string)
 	if not isSeed then
 	-- ✅ Fruit (mutated)
 		local rarity, mutations, weight, fruitName = fruitNameParser(itemData)
-		if weight > 0 and fruitName then
+		if weight and weight > 0 and fruitName then
 			-- valid fruit
 			local seedData = seedDataModule.getData(fruitName .. " Seed")
 			local multiHarvest = seedData

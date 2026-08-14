@@ -24,9 +24,12 @@ local function getTrackableNPCs()
 
 	local npcs = {}
 	for _, npc in pairs(characters:GetChildren()) do
-		local hrp = npc:WaitForChild("HumanoidRootPart")
-		local head = npc:WaitForChild("Head")
-		local neck = head and head:WaitForChild("Neck")
+		-- Timeouts matter: a timeout-less WaitForChild here hangs forever on
+		-- any NPC missing a part (e.g. R6 rigs keep Neck in Torso, not Head),
+		-- silently killing head-tracking for ALL NPCs.
+		local hrp = npc:WaitForChild("HumanoidRootPart", 5)
+		local head = npc:WaitForChild("Head", 5)
+		local neck = head and head:WaitForChild("Neck", 5)
 
 		if hrp and head and neck then
 			table.insert(npcs, {
@@ -50,7 +53,9 @@ RunService.RenderStepped:Connect(function()
 	local playerChar = LocalPlayer.Character
 	if not playerChar then return end
 
-	local playerHrp = playerChar:WaitForChild("HumanoidRootPart")
+	-- Never WaitForChild inside RenderStepped: during respawn each frame
+	-- would stack another yielded thread. Just skip frames until HRP exists.
+	local playerHrp = playerChar:FindFirstChild("HumanoidRootPart")
 	if not playerHrp then return end
 
 	for _, npc in pairs(npcs) do
@@ -66,12 +71,12 @@ RunService.RenderStepped:Connect(function()
 			local vecB = Vector2.new(hrp.CFrame.LookVector.X, hrp.CFrame.LookVector.Z)
 			local dot = vecA:Dot(vecB)
 			local cross = vecA.X * vecB.Y - vecA.Y * vecB.X
-			local yAngle = math.atan2(cross, dot)
+			local yAngle = math.atan(cross, dot)
 			yAngle = math.clamp(yAngle, -MAX_ANGLE, MAX_ANGLE)
 
 			local verticalOffset = playerHrp.Position.Y - head.Position.Y
 			local angleDistance = (playerHrp.Position - head.Position).Magnitude
-			local xAngle = math.atan2(verticalOffset, angleDistance)
+			local xAngle = math.atan(verticalOffset, angleDistance)
 
 			local targetC0 = originalC0 * CFrame.Angles(xAngle, yAngle, 0)
 			neck.C0 = neck.C0:Lerp(targetC0, SMOOTHING)

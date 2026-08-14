@@ -205,18 +205,20 @@ function Service.plantSeed(player: Player, seedName: string, location: CFrame, p
 	end
 end
 
-function Service.giveSeed(player:Player, seedName:string, amount:number)
+-- Returns true only when the seed was actually added. ProcessReceipt relies on
+-- this to avoid marking Robux receipts granted when the grant no-oped.
+function Service.giveSeed(player:Player, seedName:string, amount:number): boolean
 	local dataService = cachedModules.Cache.DataService
 	local inventoryService = cachedModules.Cache.InventoryService
 
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then
 		warn("❌ giveSeed received non-player argument:", player)
-		return
+		return false
 	end
 
-	if player:GetAttribute("DataLoaded") ~= true then return end
+	if player:GetAttribute("DataLoaded") ~= true then return false end
 	local playerData = dataService.getData(player)
-	if not playerData then return end
+	if not playerData then return false end
 
 	local inventory = playerData.Inventory
 	local foundSeed = inventory[seedName]
@@ -229,6 +231,7 @@ function Service.giveSeed(player:Player, seedName:string, amount:number)
 
 	-- ✅ Just pass the base name
 	inventoryService.inventoryUpdated(player, seedName)
+	return true
 end
 
 local function getRemainingSeconds(): number
@@ -395,6 +398,42 @@ function Service:GetTimeUntilRestock()
 	return math.max(0, restockInterval - elapsed)
 end
 
+-- Atomically adjust one crop's StockAmount in the shared stock blob.
+-- Returns true only when the adjustment was applied. UpdateAsync retries the
+-- transform on conflict, so two servers can no longer both consume the same
+-- last unit (the old Get -> mutate -> Set flow oversold and resurrected stock).
+function Service:TryAdjustStock(cropName: string, delta: number): boolean
+	if IS_STUDIO then
+		local stock = normalizeStock(studioStock)
+		local crop = stock and stock[cropName]
+		if not crop or crop.StockAmount + delta < 0 then
+			return false
+		end
+		crop.StockAmount += delta
+		return true
+	end
+	local memoryStore = MemoryStoreService:GetSortedMap("GLOBAL_SHOP")
+	local applied = false
+	local ok = pcall(function()
+		memoryStore:UpdateAsync(stockMemoryKey, function(raw)
+			applied = false -- transform can rerun on conflict; only the final run counts
+			if typeof(raw) ~= "string" then
+				return nil -- no stock blob: cancel the update
+			end
+			local decoded = HttpService:JSONDecode(raw)
+			local stock = normalizeStock(decoded)
+			local crop = stock and stock[cropName]
+			if not crop or crop.StockAmount + delta < 0 then
+				return nil
+			end
+			crop.StockAmount += delta
+			applied = true
+			return HttpService:JSONEncode(decoded)
+		end, restockInterval + 60)
+	end)
+	return ok and applied
+end
+
 function Service:SaveStockToMemoryStore(stockData)
 	if IS_STUDIO then return end
 	local memoryStore = MemoryStoreService:GetSortedMap("GLOBAL_SHOP")
@@ -495,9 +534,21 @@ function Service.init()
 		end)
 	end)
 
+	-- Rate limit: every BuyCrop hits MemoryStore (Get + Set). Without this a
+	-- spamming client can burn the experience's MemoryStore quota and take the
+	-- shop down for everyone.
+	local lastBuyAt: {[Player]: number} = {}
+	Players.PlayerRemoving:Connect(function(player)
+		lastBuyAt[player] = nil
+	end)
+
 	RemoteEvents.BuyCrop.OnServerEvent:Connect(function(player, cropName)
 		if player:GetAttribute("DataLoaded") ~= true then return end
 		if typeof(cropName) ~= "string" then return end
+
+		local now = os.clock()
+		if lastBuyAt[player] and now - lastBuyAt[player] < 0.5 then return end
+		lastBuyAt[player] = now
 
 		-- Tier gate, re-checked here rather than trusting the pushed stock view. Unknown
 		-- seeds fail closed (getTierForSeed returns nil).
@@ -519,12 +570,12 @@ function Service.init()
 		local price = crop.Price
 		if typeof(price) ~= "number" or price <= 0 then return end
 		if not moneyService.hasEnoughCash(player, price) then return end
-		moneyService.removeCash(player, price)
-		crop.StockAmount -= 1
-		if IS_STUDIO then
-			studioStock = stock
-		else
-			Service:SaveStockToMemoryStore(stock)
+		-- Reserve the unit atomically BEFORE charging: if another server took
+		-- the last one, the buy simply fails and no money moves.
+		if not Service:TryAdjustStock(cropName, -1) then return end
+		if not moneyService.removeCash(player, price) then
+			Service:TryAdjustStock(cropName, 1) -- best-effort: return the reserved unit
+			return
 		end
 		Service.giveSeed(player, cropName, 1)
 	end)

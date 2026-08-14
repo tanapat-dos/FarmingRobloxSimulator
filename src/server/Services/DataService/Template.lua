@@ -28,6 +28,7 @@ local template = {
 	},
 	AchievementsClaimed = {}, -- set of claimed achievement ids { [id] = true }
 	Rebirths = 0,
+	ProcessedReceipts = {}, -- recent dev-product PurchaseIds (idempotency, capped)
 }
 
 return template

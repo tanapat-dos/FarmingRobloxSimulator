@@ -286,4 +286,3 @@ if petRollResult then
 	end)
 end
 
-
