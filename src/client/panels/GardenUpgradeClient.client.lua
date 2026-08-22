@@ -14,6 +14,12 @@ local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local upgradeRemote = remotes:WaitForChild("GardenUpgrade")
 local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
+local ResponsiveUi = require(ReplicatedStorage:WaitForChild("Modules").ResponsiveUi)
+
+-- Panel is authored at a desktop-tuned size; ResponsiveUi shrinks it to fit small viewports and
+-- leaves desktop at exactly 1.0. See that module for why it fits on both axes.
+local PANEL_WIDTH = 720
+local PANEL_HEIGHT = 540
 
 local COLORS = {
 	panel = Color3.fromRGB(28, 32, 42),
@@ -207,11 +213,15 @@ local function buildPanel()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(720, 540)
+	panel.Size = UDim2.fromOffset(PANEL_WIDTH, PANEL_HEIGHT)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.Parent = gui
 	corner(panel, 20)
 	stroke(panel, Color3.fromRGB(14, 16, 22), 2, 0.2)
+
+	-- Shrinks the panel and every descendant together on small viewports, and re-fits on resize
+	-- or rotation. Centred via AnchorPoint 0.5, so scaling needs no position maths.
+	ResponsiveUi.attachFitScale(panel, PANEL_WIDTH, PANEL_HEIGHT)
 
 	-- Header bar
 	local headerBar = Instance.new("Frame")

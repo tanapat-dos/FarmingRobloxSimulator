@@ -23,6 +23,7 @@ local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 local dailyRemote = remotes:WaitForChild("DailyLogin")
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 local CloseIconUi = require(ReplicatedStorage:WaitForChild("Modules").CloseIconUi)
+local ResponsiveUi = require(ReplicatedStorage:WaitForChild("Modules").ResponsiveUi)
 local soundsFolder = ReplicatedStorage:WaitForChild("Sounds")
 
 local REWARDS = EconomyBalance.DAILY_LOGIN_REWARDS
@@ -49,7 +50,9 @@ local COLORS = {
 
 local DAY_ICONS = { "🌱", "🌿", "🍃", "🌼", "🌸", "🌺", "⭐" }
 
-local PANEL_SIZE = UDim2.fromOffset(680, 460)
+local PANEL_WIDTH = 680
+local PANEL_HEIGHT = 460
+local PANEL_SIZE = UDim2.fromOffset(PANEL_WIDTH, PANEL_HEIGHT)
 local OPEN_TWEEN_INFO = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local CLOSE_TWEEN_INFO = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local FADE_TWEEN_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -284,6 +287,10 @@ local function buildPanel()
 	panel.Parent = gui
 	corner(panel, 18)
 	stroke(panel, Color3.fromRGB(14, 16, 28), 2, 0.2)
+
+	-- Composes with the open/close Size tweens: those animate Size, this multiplies the result, so
+	-- the pop-in animation is untouched while the panel still fits a phone screen.
+	ResponsiveUi.attachFitScale(panel, PANEL_WIDTH, PANEL_HEIGHT)
 	local outerGlow = stroke(panel, COLORS.gold, 6, 0.85)
 	outerGlow.Name = "OuterGlow"
 

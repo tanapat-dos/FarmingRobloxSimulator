@@ -52,6 +52,7 @@ local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 
 local NavigationHudState = require(ReplicatedStorage:WaitForChild("Modules").NavigationHudState)
 local BackpackPanelUi = require(ReplicatedStorage:WaitForChild("Modules").BackpackPanelUi)
+local ResponsiveUi = require(ReplicatedStorage:WaitForChild("Modules").ResponsiveUi)
 local EconomyBalance = require(ReplicatedStorage:WaitForChild("Modules").EconomyBalance)
 
 local templates = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("MenuBarTemplates")
@@ -98,16 +99,38 @@ local DESKTOP_MAX_SCALE = 1.35
 local TOUCH_MULTIPLIER = 1.1
 local TOUCH_MAX_SCALE = 1.6
 
+--[[
+	Touch sizing used to floor at DESKTOP_MIN_SCALE and then multiply by TOUCH_MULTIPLIER, which
+	meant the smallest a phone could ever render was 0.95 * 1.1 = 1.045 — i.e. the bar was always
+	LARGER on a phone than on desktop, however small the screen. At 1.045 the expanded grid is
+	~315px wide, which is roughly half the width of a small phone viewport. That is the "too big on
+	mobile" report.
+
+	The multiplier is still right in spirit (fingers need bigger targets than a mouse), so instead of
+	dropping it we cap the result against the viewport: the bar may not exceed a fraction of the
+	screen in either axis. TOUCH_MIN_SCALE is the tap-target floor — at 0.7 a 64px button still
+	renders ~45px, which stays above the ~44px comfortable-touch guideline, so shrinking to fit
+	never makes the bar hard to hit.
+]]
+local TOUCH_MIN_SCALE = 0.7
+local TOUCH_MAX_WIDTH_FRACTION = 0.3
+local TOUCH_MAX_HEIGHT_FRACTION = 0.45
+
+-- Nominal expanded footprint used for the viewport caps above. Three rows covers the current
+-- button count at GRID_COLUMNS wide; it is a sizing hint, not a layout constraint.
+local GRID_NOMINAL_ROWS = 3
+local BAR_NOMINAL_HEIGHT = GRID_NOMINAL_ROWS * BTN_H + (GRID_NOMINAL_ROWS - 1) * BTN_GAP + BAR_PAD_Y * 2
+
 local function computeResponsiveScale(): number
-	local camera = workspace.CurrentCamera
-	local viewport = camera and camera.ViewportSize or Vector2.new(REFERENCE_VIEWPORT_WIDTH, 720)
+	local viewport = ResponsiveUi.getViewport()
 	local widthRatio = viewport.X / REFERENCE_VIEWPORT_WIDTH
 	local scale = math.clamp(widthRatio, DESKTOP_MIN_SCALE, DESKTOP_MAX_SCALE)
 
 	if UserInputService.TouchEnabled then
-		-- Phones/tablets: floor first so a narrow portrait viewport doesn't
-		-- shrink the multiplier away, then boost for comfortable tap size.
-		scale = math.clamp(scale * TOUCH_MULTIPLIER, DESKTOP_MIN_SCALE, TOUCH_MAX_SCALE)
+		local boosted = scale * TOUCH_MULTIPLIER
+		local widthCap = (viewport.X * TOUCH_MAX_WIDTH_FRACTION) / BAR_MAX_WIDTH
+		local heightCap = (viewport.Y * TOUCH_MAX_HEIGHT_FRACTION) / BAR_NOMINAL_HEIGHT
+		scale = math.clamp(math.min(boosted, widthCap, heightCap), TOUCH_MIN_SCALE, TOUCH_MAX_SCALE)
 	end
 
 	return scale
