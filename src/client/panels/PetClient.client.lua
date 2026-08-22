@@ -162,61 +162,53 @@ local function getOwnerRoot(ownerUserId: number): BasePart?
 end
 
 --[[
-	Follower facing correction.
+	Permanent orientation convention:
+	- A calibrated pet has a direct BasePart child named FollowerRoot.
+	- FollowerRoot is the Model.PrimaryPart.
+	- FollowerRoot contains FacingAttachment; its LookVector is visual forward and UpVector is up.
 
-	spawnPet below pivots the whole model to root.CFrame every frame (see the Heartbeat
-	connection), which OVERWRITES the model's PrimaryPart rotation completely — any Orientation
-	baked into the source asset in ReplicatedStorage is discarded the instant the pet spawns.
-	So whichever way a pet visually faces once it's following the player is determined purely
-	by that mesh's own raw geometry (baked in by whoever modeled it), NOT by any editable
-	property. Some meshes happen to line up with "face = player's forward" once rotation is
-	forced to match root; others need a corrective rotation applied on top, every frame, so it
-	can't be silently overwritten the way editing Orientation in the asset was.
-
-	Read from per-pet-model Attributes rather than hardcoded in this script, so fixing a
-	misaligned pet is a Studio property edit (or by the pet integration tool) instead of a
-	script redeploy. Three independent axes because a single yaw (Y) correction can only spin
-	a pet around the vertical axis — a pet that's modeled lying on its side or nose-down needs
-	pitch (X) and/or roll (Z) too, not just Y.
-
-	FacingOffsetX / FacingOffsetY / FacingOffsetZ — degrees, applied in that order via
-	CFrame.Angles. FacingOffsetDegrees is kept as a legacy alias for FacingOffsetY (old pets
-	that only ever needed a yaw flip keep working without re-tagging).
+	Runtime aligns that complete attachment frame with the player's level facing frame. This
+	handles arbitrary imported forward/up axes without guessing from mesh bounds. Legacy
+	FacingOffset attributes remain only as a migration fallback for uncalibrated assets.
 ]]
-local function getFacingOffset(src: Model): CFrame
+local function getFollowerRoot(model: Model): BasePart?
+	local root = model:FindFirstChild("FollowerRoot")
+	if root and root:IsA("BasePart") then
+		return root
+	end
+	return nil
+end
+
+local function getFacingAttachment(root: BasePart?): Attachment?
+	local attachment = root and root:FindFirstChild("FacingAttachment")
+	if attachment and attachment:IsA("Attachment") then
+		return attachment
+	end
+	return nil
+end
+
+local function getLegacyFacingOffset(src: Model): CFrame
 	local x = src:GetAttribute("FacingOffsetX")
 	local y = src:GetAttribute("FacingOffsetY")
 	local z = src:GetAttribute("FacingOffsetZ")
 	if typeof(y) ~= "number" then
-		y = src:GetAttribute("FacingOffsetDegrees") -- legacy single-axis attribute
+		y = src:GetAttribute("FacingOffsetDegrees")
 	end
 
 	x = if typeof(x) == "number" then x else 0
 	y = if typeof(y) == "number" then y else 0
 	z = if typeof(z) == "number" then z else 0
-
-	if x == 0 and y == 0 and z == 0 then
-		return CFrame.new()
-	end
 	return CFrame.Angles(math.rad(x), math.rad(y), math.rad(z))
 end
 
 local FOLLOW_OFFSET = Vector3.new(2.5, 0, 0) -- local-space offset from root (to the right)
 local FOLLOW_UP = Vector3.new(0, 1, 0) -- world up, not root.CFrame.UpVector — see below
 
---[[
-	Builds the follower's target CFrame explicitly from root's position/LookVector instead of
-	multiplying CFrame.new(offset) onto root.CFrame directly. The difference: root.CFrame *
-	offset inherits root's exact rotation basis, roll included — if root ever has any
-	incidental roll (ragdoll, seated, physics), the follower rolls with it. Reconstructing via
-	CFrame.lookAt(position, position + lookVector, worldUp) instead locks the follower level
-	against world-up regardless of root's own roll, so the per-pet facingOffset (which assumes
-	a level base frame) always applies from a clean, predictable orientation.
-]]
-local function computeFollowTarget(root: BasePart, facingOffset: CFrame): CFrame
+-- Rebuild a level frame from LookVector so seated/ragdolled root roll cannot tilt the pet.
+local function computeFollowTarget(root: BasePart, facingCorrection: CFrame): CFrame
 	local position = (root.CFrame * CFrame.new(FOLLOW_OFFSET)).Position
 	local baseCFrame = CFrame.lookAt(position, position + root.CFrame.LookVector, FOLLOW_UP)
-	return baseCFrame * facingOffset
+	return baseCFrame * facingCorrection
 end
 
 local function spawnPet(ownerUserId: number, eggName: string, petName: string)
@@ -233,22 +225,43 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 		return
 	end
 
-	local facingOffset = getFacingOffset(src)
-	local model = src:Clone()
+	local sourceFollowerRoot = getFollowerRoot(src)
+	local sourceFacingAttachment = getFacingAttachment(sourceFollowerRoot)
+	local facingCorrection = if sourceFacingAttachment
+		then sourceFacingAttachment.CFrame:Inverse()
+		elseif sourceFollowerRoot then CFrame.new()
+		else getLegacyFacingOffset(src)
+	if sourceFollowerRoot and src.PrimaryPart ~= sourceFollowerRoot then
+		warn("[PetClient] Calibrated pet PrimaryPart was not FollowerRoot; repairing clone:", eggName, petName)
+	end
+	if sourceFollowerRoot and not sourceFacingAttachment then
+		warn("[PetClient] Calibrated pet is missing FacingAttachment:", eggName, petName)
+	end
 
+	local model = src:Clone()
 	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") then
 			part.Anchored = true
 			part.CanCollide = false
+			part.CanTouch = false
+			part.CanQuery = false
 			part.CastShadow = false
 		end
 	end
 
-	if not model.PrimaryPart then
+	local followerRoot = getFollowerRoot(model)
+	if followerRoot then
+		model.PrimaryPart = followerRoot
+	elseif not model.PrimaryPart then
 		local primary = model:FindFirstChildWhichIsA("BasePart", true)
 		if primary then
 			model.PrimaryPart = primary
 		end
+	end
+	if not model.PrimaryPart then
+		warn("[PetClient] Pet model has no BasePart:", petName, "in", eggName)
+		model:Destroy()
+		return
 	end
 
 	pcall(function()
@@ -265,12 +278,12 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 				local character = ownerPlayer.CharacterAdded:Wait()
 				local hrp = character:WaitForChild("HumanoidRootPart", 10)
 				if hrp and activePets[ownerUserId] and activePets[ownerUserId].model == model then
-					model:PivotTo(computeFollowTarget(hrp, facingOffset))
+					model:PivotTo(computeFollowTarget(hrp, facingCorrection))
 				end
 			end)
 		end
 	else
-		model:PivotTo(computeFollowTarget(root, facingOffset))
+		model:PivotTo(computeFollowTarget(root, facingCorrection))
 	end
 
 	model.Parent = workspace
@@ -284,7 +297,7 @@ local function spawnPet(ownerUserId: number, eggName: string, petName: string)
 			return
 		end
 		local pivot = model:GetPivot()
-		local target = computeFollowTarget(currentRoot, facingOffset)
+		local target = computeFollowTarget(currentRoot, facingCorrection)
 		model:PivotTo(pivot:Lerp(target, 0.15))
 	end)
 
